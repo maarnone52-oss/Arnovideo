@@ -228,7 +228,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.4.0';
+const VERSION='1.4.1';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -265,18 +265,34 @@ async function addFiles(files){if(!files.length||busy)return;
 async function loadImage(it){
   const img=new Image();img.src=it.url;await once(img,'load',20000);
   it.el=img;it.w=img.naturalWidth;it.h=img.naturalHeight;it.dur=parseFloat($('defDur').value);
-  it.thumb=thumbOf(img,it.w,it.h);
+  it.thumb=thumbOf(img,it.w,it.h);it.thumbV=2;
 }
 async function loadVideo(it){
   const v=makeVideo();v.muted=true;v.src=it.url;
   await once(v,'loadedmetadata',30000);
   it.dur=v.duration;it.w=v.videoWidth;it.h=v.videoHeight;
   if(!isFinite(it.dur)||!it.dur)throw new Error('durata sconosciuta');
-  try{v.currentTime=Math.min(0.2,it.dur/2);await once(v,'seeked',8000);if(v.readyState<2)await once(v,'loadeddata',4000);it.thumb=thumbOf(v,it.w,it.h);}catch(e){}
+  it.thumb=await firstFrame(v,it.w,it.h);it.thumbV=2;
+  v.removeAttribute('src');v.load();v.remove();
+}
+// miniatura = primo fotogramma del video, intero (senza ritagli)
+async function firstFrame(v,w,h){
+  try{
+    if(v.readyState<2){try{await once(v,'loadeddata',6000);}catch(e){}}
+    v.currentTime=0.001;try{await once(v,'seeked',6000);}catch(e){}
+    if(v.readyState<2){   // su iPhone a volte il fotogramma arriva solo dopo un attimo di riproduzione
+      try{await v.play();v.pause();v.currentTime=0.001;await once(v,'seeked',4000);}catch(e){}}
+    if(v.requestVideoFrameCallback)await new Promise(r=>{let ok=false;v.requestVideoFrameCallback(()=>{ok=true;r();});setTimeout(()=>{if(!ok)r();},300);});
+    return v.readyState>=2?thumbOf(v,w,h):'';
+  }catch(e){return '';}
+}
+async function refreshThumb(it){   // rifà la miniatura dei video dei progetti salvati prima di questa versione
+  const v=makeVideo();v.muted=true;v.src=it.url;
+  try{await once(v,'loadedmetadata',20000);const t=await firstFrame(v,v.videoWidth,v.videoHeight);if(t){it.thumb=t;it.thumbV=2;}}catch(e){}
   v.removeAttribute('src');v.load();v.remove();
 }
 function thumbOf(src,w,h){try{const c=document.createElement('canvas');c.width=240;c.height=135;const x=c.getContext('2d');
-  x.fillStyle='#000';x.fillRect(0,0,240,135);drawFit(x,src,w,h,240,135,'cover');return c.toDataURL('image/jpeg',.7);}catch(e){return '';}}
+  x.fillStyle='#000';x.fillRect(0,0,240,135);drawFit(x,src,w,h,240,135,'contain');return c.toDataURL('image/jpeg',.7);}catch(e){return '';}}
 
 /* ---------- timeline ---------- */
 function render(){
@@ -626,7 +642,7 @@ async function saveNow(){clearTimeout(saveTimer);saveTimer=null;if(!db||restorin
   if(!curProj){if(!items.length)return;curProj={id:'p'+Date.now(),name:defaultName(),created:Date.now()};showProj();}
   const rec={id:curProj.id,name:curProj.name,created:curProj.created,updated:Date.now(),playT,
     settings:{fmt:$('fmt').value,fit:$('fit').value,defDur:$('defDur').value,quality:$('quality').value},
-    items:items.map(it=>({type:it.type,name:it.name,dur:it.dur,w:it.w,h:it.h,thumb:it.thumb,size:it.size||0,fkey:it.fkey}))};
+    items:items.map(it=>({type:it.type,name:it.name,dur:it.dur,w:it.w,h:it.h,thumb:it.thumb,thumbV:it.thumbV||0,size:it.size||0,fkey:it.fkey}))};
   try{await dbPut('projects',rec);const d=new Date();$('saved').textContent='salvato alle '+d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
     localStorage.setItem('arnovideo-last',curProj.id);}catch(e){$('saved').textContent='non salvato';}
   if(!$('recent').hidden)listRecent();
@@ -648,6 +664,9 @@ async function openProject(id){
   const st=rec.settings||{};['fmt','fit','defDur','quality'].forEach(k=>{if(st[k]!=null)$(k).value=st[k];});
   curProj={id:rec.id,name:rec.name,created:rec.created};showProj();playT=rec.playT||0;resetHistory();
   restoring=false;render();localStorage.setItem('arnovideo-last',rec.id);
+  (async()=>{const old=items.filter(i=>i.thumbV!==2);let n=0;   // miniature vecchie: rifatte col primo fotogramma
+    for(const it of old){if(it.type==='vid')await refreshThumb(it);else if(it.el){it.thumb=thumbOf(it.el,it.w,it.h);it.thumbV=2;}n++;}
+    if(n&&!busy){render();}})();
   setStatus(missing?missing+' elementi non sono stati trovati nell\'archivio.':'Progetto «'+rec.name+'» aperto.',!!missing);
   if(!$('recent').hidden)listRecent();
 }
