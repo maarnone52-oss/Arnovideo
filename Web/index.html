@@ -59,7 +59,7 @@ button{font:inherit;color:var(--text);cursor:pointer}
 #tl{display:flex;gap:10px;overflow-x:auto;padding:12px 6px 14px;min-height:190px;background:#101114;border-radius:10px;
  box-shadow:inset 0 2px 8px rgba(0,0,0,.8);scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
 #tl:empty::before{content:attr(data-empty);margin:auto;color:var(--dim);font-size:15px;text-align:center;padding:0 20px}
-.clip{flex:none;width:150px;border-radius:10px;background:linear-gradient(180deg,#34383f,#25282d);border:1px solid #4b5058;
+.clip{flex:none;width:150px;cursor:pointer;border-radius:10px;background:linear-gradient(180deg,#34383f,#25282d);border:1px solid #4b5058;
  box-shadow:0 4px 10px rgba(0,0,0,.5);overflow:hidden;scroll-snap-align:start;position:relative;user-select:none;-webkit-user-select:none}
 .clip.vid{border-top:3px solid #ffb21e}.clip.img{border-top:3px solid #38c6ff}
 .clip.drag{opacity:.35}
@@ -129,7 +129,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <div class="dwin"><div class="lcd g" id="totN">0</div><span class="lbl">elementi</span></div>
     </div>
     <div id="tl" data-empty="Nessun elemento. Tocca «Aggiungi video e foto»."></div>
-    <p class="note">Trascina un elemento tenendolo per l'immagine per cambiarne la posizione, oppure usa ◀ ▶. Per le foto regola la durata con − e ＋.</p>
+    <p class="note">Tocca un elemento per vederne l'inizio nell'anteprima. Trascinalo tenendolo per l'immagine per cambiarne la posizione, oppure usa ◀ ▶. Per le foto regola la durata con − e ＋.</p>
   </section>
 
 
@@ -194,7 +194,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.1.1';
+const VERSION='1.1.2';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -258,7 +258,10 @@ function render(){
   $('scrub').max=totalDur();
   if(!busy){if(none){setT(0);blank();}else showFrame(Math.min(playT,totalDur()));}
 }
-$('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b||busy)return;
+const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){unlockPv();jumpTo(startOf(i));}};
+$('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');
+  if(!b){const c=e.target.closest('.clip');if(c&&!e.target.closest('.thumb')&&!e.target.closest('button'))goToItem(+c.dataset.id);return;}
+  if(busy)return;
   const id=+b.closest('.clip').dataset.id,i=items.findIndex(x=>x.id===id),it=items[i],a=b.dataset.a;
   if(a==='left'&&i>0)[items[i-1],items[i]]=[items[i],items[i-1]];
   else if(a==='right'&&i<items.length-1)[items[i+1],items[i]]=[items[i],items[i+1]];
@@ -271,7 +274,8 @@ $('clearBtn').onclick=()=>{if(busy||!confirm('Togliere tutti gli elementi dalla 
 
 // trascinamento: si tiene premuta l'immagine e si sposta a destra o sinistra
 (function(){let drag=null;
-  $('tl').addEventListener('pointerdown',e=>{const th=e.target.closest('.thumb');if(!th||busy)return;
+  $('tl').addEventListener('pointerdown',e=>{const th=e.target.closest('.thumb');if(!th)return;
+    if(busy){e.preventDefault();goToItem(+th.closest('.clip').dataset.id);return;}
     const clip=th.closest('.clip'),r=clip.getBoundingClientRect();e.preventDefault();
     drag={clip,id:+clip.dataset.id,dx:e.clientX-r.left,dy:e.clientY-r.top,ghost:null,sx:e.clientX,sy:e.clientY,pid:e.pointerId};
     try{th.setPointerCapture(e.pointerId);}catch(_){}
@@ -289,7 +293,7 @@ $('clearBtn').onclick=()=>{if(busy||!confirm('Togliere tutti gli elementi dalla 
   const end=e=>{if(!drag||(e&&e.pointerId!==drag.pid))return;
     if(drag.ghost){drag.ghost.remove();const order=[...$('tl').children].map(c=>+c.dataset.id);
       items.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));}
-    drag=null;render();};
+    const tap=!drag.ghost,id=drag.id;drag=null;render();if(tap)goToItem(id);};
   window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
 })();
 
