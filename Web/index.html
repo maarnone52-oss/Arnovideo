@@ -97,6 +97,28 @@ button{font:inherit;color:var(--text);cursor:pointer}
 .set label{display:block}
 select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--text);border:1px solid #3a404b;border-radius:8px;padding:0 10px;margin-top:6px}
 /* anteprima */
+.pvhead{display:flex;justify-content:space-between;align-items:center;margin:-4px 0 8px}
+.pvbox.float{position:fixed;z-index:60;display:flex;flex-direction:column;margin:0;background:linear-gradient(180deg,#2f3238,#1e2024);
+ border:1px solid #5a5f68;border-radius:14px;padding:8px 12px 12px;box-shadow:0 22px 60px rgba(0,0,0,.85)}
+.pvbox.float .pvhead{cursor:move;touch-action:none;-webkit-user-select:none;user-select:none;margin:0 0 6px;padding:2px 0 4px;border-bottom:1px solid #3b3f46}
+.pvbox.float .pvhead .lbl::before{content:"⠿ ";color:#ffb21e}
+.pvbox.float .screen{flex:1 1 auto;min-height:40px;align-items:center}
+.pvbox.float #scrub{margin:6px 0 0}
+.pvbox.float .transport{margin-top:6px;gap:6px}
+.pvbox.float .transport .btn{min-width:44px;min-height:42px;font-size:18px;padding:0 8px}
+.pvbox.float .transport .btn.big{min-width:56px;font-size:20px}
+.pvgrip{display:none}
+.pvbox.float .pvgrip{display:block;position:absolute;right:0;bottom:0;width:30px;height:30px;cursor:nwse-resize;touch-action:none;
+ background:linear-gradient(135deg,transparent 52%,#ffb21e 52%,#ffb21e 58%,transparent 58%,transparent 68%,#ffb21e 68%,#ffb21e 74%,transparent 74%);border-bottom-right-radius:14px}
+.pvplace{text-align:center;padding:18px 10px;border:2px dashed #4b5058;border-radius:12px;color:var(--dim)}
+.pvplace[hidden]{display:none}
+/* miniature distribuite lungo il video, per riconoscerne il contenuto */
+#tl.list .clip{flex-wrap:wrap}
+.strip{display:none}
+#tl.list .strip{display:flex;flex-basis:100%;gap:2px;padding:0 6px 6px;min-height:0}
+#tl.list .strip i{flex:1;min-width:0;aspect-ratio:16/9;background:#000 center/contain no-repeat;border-radius:3px;cursor:pointer;position:relative}
+#tl.list .strip i span{position:absolute;left:2px;bottom:1px;font:600 9px "SF Mono",Menlo,monospace;color:#fff;text-shadow:0 0 3px #000}
+#tl.list .strip.wait i{background:#15171a}
 .screen{background:#000;border-radius:10px;overflow:hidden;box-shadow:inset 0 0 0 1px #000,0 2px 10px rgba(0,0,0,.6);display:flex;justify-content:center}
 #cv{display:block;max-width:100%;max-height:60vh;background:#000}
 .bar{height:12px;border-radius:6px;background:#0a0403;box-shadow:inset 0 2px 4px #000;overflow:hidden;margin:12px 0 4px}
@@ -186,7 +208,10 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
   <section class="rack">
     <span class="lbl">3 · Anteprima ed esportazione</span>
-    <div class="screen"><canvas id="cv" width="1280" height="720"></canvas></div>
+    <div id="pvPlace" class="pvplace" hidden>L'anteprima è in una finestra a parte. <button class="btn sm" id="pvBack">⇲ Riaggancia qui</button></div>
+    <div id="pvBox" class="pvbox">
+    <div class="pvhead"><span class="lbl">Anteprima</span><button class="btn xs" id="pvDetach" style="padding:0 10px">⧉ Sgancia</button></div>
+    <div class="screen" id="pvScreen"><canvas id="cv" width="1280" height="720"></canvas></div>
     <input type="range" id="scrub" min="0" max="0" step="0.05" value="0" disabled aria-label="Posizione">
     <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0 / 0:00.0</span></div>
     <div class="row c transport">
@@ -196,6 +221,8 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn tpb" id="ffw" disabled aria-label="Avanti veloce">⏩︎</button>
       <button class="btn tpb" id="nextItem" disabled aria-label="Elemento successivo">⏭︎</button>
       <span id="speed"></span>
+    </div>
+    <div class="pvgrip" id="pvGrip" aria-label="Ridimensiona"></div>
     </div>
     <p class="note" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
     <div class="row c" style="margin-top:12px">
@@ -246,7 +273,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.6.0';
+const VERSION='1.7.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -278,7 +305,7 @@ async function addFiles(files){if(!files.length||busy)return;
     catch(err){URL.revokeObjectURL(it.url);setStatus('Non riesco a leggere «'+f.name+'»: '+err.message,true);await sleep(1500);}
     render();
   }
-  setStatus('Pronto.');
+  setStatus('Pronto.');queueStrips();
 }
 async function loadImage(it){
   const img=new Image();img.src=it.url;await once(img,'load',20000);
@@ -312,6 +339,63 @@ async function refreshThumb(it){   // rifà la miniatura dei video dei progetti 
 function thumbOf(src,w,h){try{const c=document.createElement('canvas');c.width=240;c.height=135;const x=c.getContext('2d');
   x.fillStyle='#000';x.fillRect(0,0,240,135);drawFit(x,src,w,h,240,135,'contain');return c.toDataURL('image/jpeg',.7);}catch(e){return '';}}
 
+/* ---------- miniature lungo il video ---------- */
+const STRIP_N=6;
+function stripTimes(d){return Array.from({length:STRIP_N},(_,k)=>Math.min(Math.max(0,d-0.05),d*k/(STRIP_N-1)*0.98));}
+function stripHTML(it){const ts=stripTimes(it.dur),ok=it.strip&&it.strip.length===STRIP_N;
+  return '<div class="strip'+(ok?'':' wait')+'">'+ts.map((t,k)=>'<i data-t="'+t.toFixed(2)+'"'+(ok?' style="background-image:url('+it.strip[k]+')"':'')+'><span>'+(it.dur<20?fmtT(t):fmtT(t).replace(/\.\d$/,''))+'</span></i>').join('')+'</div>';}
+const stripQ=[];let stripRunning=false;
+function queueStrips(){items.forEach(it=>{if(it.type==='vid'&&!(it.strip&&it.strip.length===STRIP_N)&&!stripQ.includes(it))stripQ.push(it);});runStrips();}
+async function runStrips(){if(stripRunning)return;stripRunning=true;
+  while(stripQ.length){
+    while(exporting||playing)await sleep(500);          // non disturba riproduzione ed esportazione
+    const it=stripQ.shift();if(!items.includes(it))continue;
+    const v=makeVideo();v.muted=true;v.src=it.url;const out=[];
+    try{await once(v,'loadedmetadata',20000);
+      if(v.readyState<2){try{await once(v,'loadeddata',5000);}catch(e){}}
+      if(v.readyState<2){try{await v.play();v.pause();}catch(e){}}
+      for(const t of stripTimes(it.dur)){v.currentTime=Math.max(0.001,t);try{await once(v,'seeked',5000);}catch(e){}
+        const c=document.createElement('canvas');c.width=160;c.height=90;const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,160,90);
+        if(v.readyState>=2)drawFit(x,v,v.videoWidth,v.videoHeight,160,90,'contain');out.push(c.toDataURL('image/jpeg',.6));}
+    }catch(e){}
+    v.removeAttribute('src');v.load();v.remove();
+    if(out.length===STRIP_N){it.strip=out;if(!it.thumb)it.thumb=out[0];
+      const el=$('tl').querySelector('.clip[data-id="'+it.id+'"] .strip');if(el)el.outerHTML=stripHTML(it);scheduleSave();}
+  }
+  stripRunning=false;}
+
+/* ---------- finestra di anteprima sganciabile e ridimensionabile ---------- */
+const pvs={float:false,x:0,y:0,w:0,h:0};
+try{Object.assign(pvs,JSON.parse(localStorage.getItem('arnovideo-anteprima'))||{});}catch(e){}
+function pvSave(){try{localStorage.setItem('arnovideo-anteprima',JSON.stringify(pvs));}catch(e){}}
+function fitCv(){const cv=$('cv'),sc=$('pvScreen');
+  if(!pvs.float){cv.style.width='';cv.style.height='';return;}
+  const aw=sc.clientWidth,ah=sc.clientHeight;if(!aw||!ah)return;
+  const k=Math.min(aw/cv.width,ah/cv.height);cv.style.width=Math.floor(cv.width*k)+'px';cv.style.height=Math.floor(cv.height*k)+'px';}
+function pvPlace(){const b=$('pvBox');if(!pvs.float)return;
+  const W=window.innerWidth,H=window.innerHeight;
+  pvs.w=Math.max(260,Math.min(pvs.w||480,W-8));pvs.h=Math.max(230,Math.min(pvs.h||360,H-8));
+  pvs.x=Math.max(4,Math.min(pvs.x,W-pvs.w-4));pvs.y=Math.max(4,Math.min(pvs.y,H-pvs.h-4));
+  Object.assign(b.style,{left:pvs.x+'px',top:pvs.y+'px',width:pvs.w+'px',height:pvs.h+'px'});fitCv();}
+function pvSet(f){pvs.float=f;const b=$('pvBox');b.classList.toggle('float',f);$('pvPlace').hidden=!f;
+  $('pvDetach').textContent=f?'⇲ Riaggancia':'⧉ Sgancia';
+  if(f){if(!pvs.w){pvs.w=Math.min(520,window.innerWidth-24);pvs.h=Math.min(Math.round(pvs.w*9/16)+170,window.innerHeight-40);
+      pvs.x=window.innerWidth-pvs.w-12;pvs.y=window.innerHeight-pvs.h-12;}pvPlace();}
+  else{['left','top','width','height'].forEach(k=>b.style[k]='');fitCv();}
+  pvSave();}
+$('pvDetach').onclick=()=>pvSet(!pvs.float);$('pvBack').onclick=()=>pvSet(false);
+window.addEventListener('resize',()=>{if(pvs.float)pvPlace();});
+if(window.ResizeObserver)new ResizeObserver(fitCv).observe($('pvScreen'));
+(function(){let mode=null,sx,sy,ox,oy,ow,oh,pid;
+  const down=(e,m)=>{if(!pvs.float||e.target.closest('button'))return;e.preventDefault();mode=m;pid=e.pointerId;
+    sx=e.clientX;sy=e.clientY;ox=pvs.x;oy=pvs.y;ow=pvs.w;oh=pvs.h;try{e.currentTarget.setPointerCapture(pid);}catch(_){}};
+  document.querySelector('.pvhead').addEventListener('pointerdown',e=>down(e,'move'));
+  $('pvGrip').addEventListener('pointerdown',e=>down(e,'size'));
+  window.addEventListener('pointermove',e=>{if(!mode||e.pointerId!==pid)return;const dx=e.clientX-sx,dy=e.clientY-sy;
+    if(mode==='move'){pvs.x=ox+dx;pvs.y=oy+dy;}else{pvs.w=ow+dx;pvs.h=oh+dy;}pvPlace();});
+  const up=e=>{if(!mode||e.pointerId!==pid)return;mode=null;pvSave();};
+  window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);})();
+
 /* ---------- timeline ---------- */
 let listView=true;try{listView=localStorage.getItem('arnovideo-vista')!=='striscia';}catch(e){}
 function setView(l){listView=l;try{localStorage.setItem('arnovideo-vista',l?'elenco':'striscia');}catch(e){}
@@ -326,6 +410,7 @@ function render(){
       (it.type==='img'?'<div class="stepper"><button class="btn xs" data-a="minus">−</button><span>'+it.dur.toFixed(1)+' s</span><button class="btn xs" data-a="plus">＋</button></div>':'')+
       '<div class="cbtns"><button class="btn xs" data-a="left"'+(i===0?' disabled':'')+'>'+(listView?'▲':'◀')+'</button><button class="btn xs" data-a="del">✕</button><button class="btn xs" data-a="right"'+(i===items.length-1?' disabled':'')+'>'+(listView?'▼':'▶')+'</button></div></div>';
     c.querySelector('.cname').textContent=it.name;
+    if(it.type==='vid')c.insertAdjacentHTML('beforeend',stripHTML(it));
     tl.appendChild(c);
   });
   $('totDur').textContent=fmtT(totalDur());$('totN').textContent=items.length;
@@ -338,7 +423,10 @@ function render(){
 }
 const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){unlockPv();jumpTo(startOf(i));}};
 $('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');
-  if(!b){const c=e.target.closest('.clip');if(c&&!e.target.closest('.thumb')&&!e.target.closest('button'))goToItem(+c.dataset.id);return;}
+  if(!b){const c=e.target.closest('.clip');if(!c)return;
+    const f=e.target.closest('.strip i[data-t]');
+    if(f){const i=items.findIndex(x=>x.id===+c.dataset.id);if(i>=0&&!exporting){unlockPv();jumpTo(startOf(i)+(+f.dataset.t));}return;}
+    if(!e.target.closest('.thumb')&&!e.target.closest('button'))goToItem(+c.dataset.id);return;}
   if(busy)return;
   const id=+b.closest('.clip').dataset.id,i=items.findIndex(x=>x.id===id),it=items[i],a=b.dataset.a;
   pushUndo({left:'spostamento',right:'spostamento',del:'eliminazione di «'+it.name+'»',plus:'durata della foto',minus:'durata della foto'}[a],
@@ -412,7 +500,7 @@ async function prepare(p,it){
 }
 
 async function runSequence(rec,startT=0){
-  const cv=$('cv'),{w,h}=outSize();cv.width=w;cv.height=h;
+  const cv=$('cv'),{w,h}=outSize();cv.width=w;cv.height=h;fitCv();
   const x=cv.getContext('2d'),mode=$('fit').value,total=totalDur();
   audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
   if(mon)mon.gain.value=rec?0.0001:1;    // in esportazione non si sente (resta registrato)
@@ -480,7 +568,7 @@ function markCur(i){const tl=$('tl');[...tl.children].forEach((c,k)=>c.classList
   const c=tl.children[i];if(!c||markCur.last===i)return;markCur.last=i;   // l'elemento in corso resta visibile nella finestra
   if(listView){if(c.offsetTop<tl.scrollTop)tl.scrollTop=c.offsetTop-8;else if(c.offsetTop+c.offsetHeight>tl.scrollTop+tl.clientHeight)tl.scrollTop=c.offsetTop+c.offsetHeight-tl.clientHeight+8;}
   else{if(c.offsetLeft<tl.scrollLeft)tl.scrollLeft=c.offsetLeft-8;else if(c.offsetLeft+c.offsetWidth>tl.scrollLeft+tl.clientWidth)tl.scrollLeft=c.offsetLeft+c.offsetWidth-tl.clientWidth+8;}}
-function blank(){const cv=$('cv');cv.width=1280;cv.height=720;const x=cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
+function blank(){const cv=$('cv');cv.width=1280;cv.height=720;fitCv();const x=cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
   x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);markCur(-1);}
 const pv=makeVideo();pv.muted=true;           // lettore muto solo per mostrare i fotogrammi
 let pvUnlocked=false;
@@ -491,7 +579,7 @@ function showFrame(t){setT(t);seekWant=playT;if(seekBusy)return;seekBusy=true;
 async function drawAt(t){
   if(!items.length)return blank();
   const L=locate(t),it=items[L.i];markCur(L.i);
-  const cv=$('cv'),{w,h}=outSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  const cv=$('cv'),{w,h}=outSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;fitCv();}
   const x=cv.getContext('2d'),mode=$('fit').value;
   if(it.type==='img'){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,it.el,it.w,it.h,w,h,mode);return;}
   if(pv.dataset.url!==it.url){pv.src=it.url;pv.dataset.url=it.url;await once(pv,'loadedmetadata',15000);}
@@ -589,7 +677,7 @@ $('expBtn').onclick=async()=>{await stopPlay();if(busy||!items.length)return;
   stopReq=false;setBusy(true,true);$('result').hidden=true;
   try{
     audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
-    const {w,h}=outSize();cv.width=w;cv.height=h;
+    const {w,h}=outSize();cv.width=w;cv.height=h;fitCv();
     const stream=cv.captureStream(30);
     if(dest)dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
     const q=+$('quality').value,bps=Math.round(q*1e6*(w*h)/(1920*1080));
@@ -701,7 +789,7 @@ async function saveNow(){clearTimeout(saveTimer);saveTimer=null;if(!db||restorin
   if(!curProj){if(!items.length)return;curProj={id:'p'+Date.now(),name:defaultName(),created:Date.now()};showProj();}
   const rec={id:curProj.id,name:curProj.name,created:curProj.created,updated:Date.now(),playT,
     settings:{fmt:$('fmt').value,fit:$('fit').value,defDur:$('defDur').value,quality:$('quality').value},
-    items:items.map(it=>({type:it.type,name:it.name,dur:it.dur,w:it.w,h:it.h,thumb:it.thumb,thumbV:it.thumbV||0,size:it.size||0,fkey:it.fkey}))};
+    items:items.map(it=>({type:it.type,name:it.name,dur:it.dur,w:it.w,h:it.h,thumb:it.thumb,thumbV:it.thumbV||0,strip:it.strip||null,size:it.size||0,fkey:it.fkey}))};
   try{await dbPut('projects',rec);const d=new Date();$('saved').textContent='salvato alle '+d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
     localStorage.setItem('arnovideo-last',curProj.id);}catch(e){$('saved').textContent='non salvato';}
   if(!$('recent').hidden)listRecent();
@@ -726,6 +814,7 @@ async function openProject(id){
   (async()=>{const old=items.filter(i=>i.thumbV!==2);let n=0;   // miniature vecchie: rifatte col primo fotogramma
     for(const it of old){if(it.type==='vid')await refreshThumb(it);else if(it.el){it.thumb=thumbOf(it.el,it.w,it.h);it.thumbV=2;}n++;}
     if(n&&!busy){render();}})();
+  queueStrips();
   setStatus(missing?missing+' elementi non sono stati trovati nell\'archivio.':'Progetto «'+rec.name+'» aperto.',!!missing);
   if(!$('recent').hidden)listRecent();
 }
@@ -757,6 +846,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',()=>saveNow());
 
 setView(listView);
+pvSet(!!pvs.float);
 if(nativeRender()){$('expNoteMac').hidden=false;$('expNote').hidden=true;}
 (async()=>{try{db=await dbOpen();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
   const last=localStorage.getItem('arnovideo-last');if(last&&!items.length)await openProject(last);gcFiles();}
