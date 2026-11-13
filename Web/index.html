@@ -85,6 +85,19 @@ select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--
 #cv{display:block;max-width:100%;max-height:60vh;background:#000}
 .bar{height:12px;border-radius:6px;background:#0a0403;box-shadow:inset 0 2px 4px #000;overflow:hidden;margin:12px 0 4px}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff4530,#ffb21e,#46ff7a)}
+/* progetti */
+.projhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+#projName{font-size:17px;font-weight:700;color:#ffb21e;background:none;border:none;border-bottom:1px dashed #6b5a2a;padding:4px 2px;max-width:100%;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#saved{font-size:12px;color:var(--dim);letter-spacing:.06em}
+#recent{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+#recent[hidden]{display:none}
+.proj{display:flex;gap:10px;align-items:center;background:#101114;border-radius:10px;padding:8px;box-shadow:inset 0 2px 6px rgba(0,0,0,.7);cursor:pointer}
+.proj.cur{outline:2px solid #46ff7a;outline-offset:-2px}
+.proj .pt{flex:none;width:72px;height:44px;border-radius:6px;background:#000 center/cover no-repeat}
+.proj .pi{flex:1;min-width:0}
+.proj .pn{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj .pd{font-size:12px;color:var(--dim)}
 /* trasporto */
 #scrub{-webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;margin:10px 0 2px;touch-action:none}
 #scrub::-webkit-slider-runnable-track{height:12px;border-radius:6px;background:linear-gradient(90deg,#ff4530,#ffb21e var(--p,0%),#0a0403 var(--p,0%));box-shadow:inset 0 2px 4px #000}
@@ -111,6 +124,20 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
     <div class="ver">versione <b id="ver"></b></div>
     <div class="tag">Video e foto in sequenza → un unico MP4</div>
   </div>
+
+  <section class="rack">
+    <span class="lbl">Progetto</span>
+    <div class="projhead">
+      <button id="projName" title="Tocca per rinominare">Nuovo progetto</button>
+      <span id="saved"></span>
+    </div>
+    <div class="row c" style="margin-top:10px">
+      <button class="btn sm" id="newProj">＋ Nuovo</button>
+      <button class="btn sm" id="recentBtn">☰ Progetti recenti</button>
+    </div>
+    <div id="recent" hidden></div>
+    <p class="note" style="text-align:center">Il progetto si salva da solo a ogni modifica, anche quando esci dall'app.</p>
+  </section>
 
   <section class="rack">
     <span class="lbl">1 · Carica</span>
@@ -194,7 +221,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.1.2';
+const VERSION='1.2.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -217,8 +244,11 @@ $('file').onchange=async e=>{const files=[...e.target.files];e.target.value='';i
   setStatus('Carico '+files.length+' file…');
   for(const f of files){
     const isImg=/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|gif|webp)$/i.test(f.name);
-    const it={id:++uid,type:isImg?'img':'vid',file:f,url:URL.createObjectURL(f),name:f.name,dur:0,w:0,h:0,thumb:''};
-    try{ if(isImg)await loadImage(it); else await loadVideo(it); items.push(it); }
+    const it={id:++uid,type:isImg?'img':'vid',file:f,url:URL.createObjectURL(f),name:f.name,dur:0,w:0,h:0,thumb:'',size:f.size,
+      fkey:'f'+Date.now()+'-'+Math.random().toString(36).slice(2,8)};
+    try{ if(isImg)await loadImage(it); else await loadVideo(it);
+      try{await dbPut('files',{key:it.fkey,blob:f});}catch(e){it.fkey=null;setStatus('Spazio insufficiente: «'+f.name+'» non verrà conservato nel progetto.',true);await sleep(1500);}
+      items.push(it); }
     catch(err){URL.revokeObjectURL(it.url);setStatus('Non riesco a leggere «'+f.name+'»: '+err.message,true);await sleep(1500);}
     render();
   }
@@ -257,6 +287,7 @@ function render(){
   document.querySelectorAll('.tpb').forEach(b=>b.disabled=none||exporting);$('scrub').disabled=none||exporting;
   $('scrub').max=totalDur();
   if(!busy){if(none){setT(0);blank();}else showFrame(Math.min(playT,totalDur()));}
+  if(!restoring)scheduleSave();
 }
 const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){unlockPv();jumpTo(startOf(i));}};
 $('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');
@@ -512,7 +543,84 @@ $('saveBtn').onclick=async()=>{if(!lastBlob)return;
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
 };
 
+/* ---------- progetti: salvataggio automatico e progetti recenti ---------- */
+let db=null,curProj=null,saveTimer=null,restoring=false;
+function dbOpen(){return new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('archivio non disponibile'));
+  const r=indexedDB.open('arnovideo',1);
+  r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('projects'))d.createObjectStore('projects',{keyPath:'id'});
+    if(!d.objectStoreNames.contains('files'))d.createObjectStore('files',{keyPath:'key'});};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function tx(store,mode,fn){return new Promise((res,rej)=>{if(!db)return rej(new Error('archivio non disponibile'));
+  const t=db.transaction(store,mode),st=t.objectStore(store);let out;const r=fn(st);if(r)r.onsuccess=()=>{out=r.result;};
+  t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('scrittura annullata'));});}
+const dbPut=(s,v)=>tx(s,'readwrite',st=>st.put(v));
+const dbGet=(s,k)=>tx(s,'readonly',st=>st.get(k));
+const dbDel=(s,k)=>tx(s,'readwrite',st=>st.delete(k));
+const dbAll=s=>tx(s,'readonly',st=>st.getAll());
+const dbKeys=s=>tx(s,'readonly',st=>st.getAllKeys());
+function defaultName(){const d=new Date(),p2=n=>String(n).padStart(2,'0');
+  return 'Progetto '+p2(d.getDate())+'/'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes());}
+function showProj(){$('projName').textContent=curProj?curProj.name:'Nuovo progetto';}
+function scheduleSave(){if(!db)return;clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,500);}
+async function saveNow(){clearTimeout(saveTimer);saveTimer=null;if(!db||restoring)return;
+  if(!curProj){if(!items.length)return;curProj={id:'p'+Date.now(),name:defaultName(),created:Date.now()};showProj();}
+  const rec={id:curProj.id,name:curProj.name,created:curProj.created,updated:Date.now(),playT,
+    settings:{fmt:$('fmt').value,fit:$('fit').value,defDur:$('defDur').value,quality:$('quality').value},
+    items:items.map(it=>({type:it.type,name:it.name,dur:it.dur,w:it.w,h:it.h,thumb:it.thumb,size:it.size||0,fkey:it.fkey}))};
+  try{await dbPut('projects',rec);const d=new Date();$('saved').textContent='salvato alle '+d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    localStorage.setItem('arnovideo-last',curProj.id);}catch(e){$('saved').textContent='non salvato';}
+  if(!$('recent').hidden)listRecent();
+}
+async function gcFiles(){   // elimina i file che nessun progetto usa più
+  try{const ps=await dbAll('projects'),used=new Set();ps.forEach(p=>p.items.forEach(i=>i.fkey&&used.add(i.fkey)));
+    items.forEach(i=>i.fkey&&used.add(i.fkey));
+    for(const k of await dbKeys('files')){const t=+String(k).slice(1).split('-')[0];if(!used.has(k)&&Date.now()-t>60000)await dbDel('files',k);}}catch(e){}}
+function clearItems(){items.forEach(it=>URL.revokeObjectURL(it.url));items.length=0;}
+async function openProject(id){
+  await stopPlay();if(busy)return;await saveNow();
+  const rec=await dbGet('projects',id);if(!rec)return;
+  restoring=true;clearItems();let missing=0;setStatus('Apro «'+rec.name+'»…');
+  for(const s of rec.items){const f=s.fkey?await dbGet('files',s.fkey):null;if(!f){missing++;continue;}
+    const it=Object.assign({},s,{id:++uid,file:f.blob,url:URL.createObjectURL(f.blob)});
+    if(it.type==='img'){try{const img=new Image();img.src=it.url;await once(img,'load',20000);it.el=img;}catch(e){missing++;continue;}}
+    items.push(it);}
+  const st=rec.settings||{};['fmt','fit','defDur','quality'].forEach(k=>{if(st[k]!=null)$(k).value=st[k];});
+  curProj={id:rec.id,name:rec.name,created:rec.created};showProj();playT=rec.playT||0;
+  restoring=false;render();localStorage.setItem('arnovideo-last',rec.id);
+  setStatus(missing?missing+' elementi non sono stati trovati nell\'archivio.':'Progetto «'+rec.name+'» aperto.',!!missing);
+  if(!$('recent').hidden)listRecent();
+}
+async function listRecent(){const box=$('recent');let ps=[];try{ps=await dbAll('projects');}catch(e){}
+  ps.sort((a,b)=>b.updated-a.updated);box.innerHTML='';
+  if(!ps.length){box.innerHTML='<p class="note" style="text-align:center">Nessun progetto salvato.</p>';return;}
+  for(const p of ps){const d=document.createElement('div');d.className='proj'+(curProj&&curProj.id===p.id?' cur':'');
+    const tot=p.items.reduce((a,i)=>a+(i.dur||0),0),mb=p.items.reduce((a,i)=>a+(i.size||0),0)/1048576;
+    const th=(p.items.find(i=>i.thumb)||{}).thumb;
+    d.innerHTML='<div class="pt"'+(th?' style="background-image:url('+th+')"':'')+'></div><div class="pi"><div class="pn"></div><div class="pd"></div></div><button class="btn xs" aria-label="Elimina">✕</button>';
+    d.querySelector('.pn').textContent=p.name;
+    d.querySelector('.pd').textContent=new Date(p.updated).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})+
+      ' · '+p.items.length+(p.items.length===1?' elemento':' elementi')+' · '+fmtT(tot)+' · '+(mb<1?'<1':mb.toFixed(0))+' MB';
+    d.onclick=e=>{if(e.target.closest('button'))return;openProject(p.id);};
+    d.querySelector('button').onclick=async()=>{if(!confirm('Eliminare il progetto «'+p.name+'»?'))return;
+      await dbDel('projects',p.id);
+      if(curProj&&curProj.id===p.id){await stopPlay();curProj=null;restoring=true;clearItems();restoring=false;showProj();$('saved').textContent='';render();}
+      await gcFiles();listRecent();};
+    box.appendChild(d);}
+}
+$('recentBtn').onclick=()=>{const b=$('recent');b.hidden=!b.hidden;if(!b.hidden)listRecent();};
+$('newProj').onclick=async()=>{if(busy)return;await saveNow();curProj=null;restoring=true;clearItems();restoring=false;showProj();
+  $('saved').textContent='';setT(0);render();localStorage.removeItem('arnovideo-last');setStatus('Nuovo progetto.');if(!$('recent').hidden)listRecent();};
+$('projName').onclick=()=>{const n=prompt('Nome del progetto',curProj?curProj.name:defaultName());if(n==null||!n.trim())return;
+  if(!curProj)curProj={id:'p'+Date.now(),name:'',created:Date.now()};curProj.name=n.trim().slice(0,60);showProj();saveNow();};
+['fmt','fit','defDur','quality'].forEach(id=>$(id).addEventListener('change',scheduleSave));
+// all'uscita dall'app salva subito
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveNow();});
+window.addEventListener('pagehide',()=>saveNow());
+
 render();
+(async()=>{try{db=await dbOpen();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  const last=localStorage.getItem('arnovideo-last');if(last&&!items.length)await openProject(last);gcFiles();}
+  catch(e){$('saved').textContent='salvataggio non disponibile';}})();
 // copia sul dispositivo per usarla anche senza internet (solo come pagina web, non nell'app)
 if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
