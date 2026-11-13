@@ -132,8 +132,34 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
     <p class="note">Trascina un elemento tenendolo per l'immagine per cambiarne la posizione, oppure usa ◀ ▶. Per le foto regola la durata con − e ＋.</p>
   </section>
 
+
   <section class="rack">
-    <span class="lbl">3 · Impostazioni</span>
+    <span class="lbl">3 · Anteprima ed esportazione</span>
+    <div class="screen"><canvas id="cv" width="1280" height="720"></canvas></div>
+    <input type="range" id="scrub" min="0" max="0" step="0.05" value="0" disabled aria-label="Posizione">
+    <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0 / 0:00.0</span></div>
+    <div class="row c transport">
+      <button class="btn tpb" id="prevItem" disabled aria-label="Elemento precedente">⏮︎</button>
+      <button class="btn tpb" id="rew" disabled aria-label="Indietro veloce">⏪︎</button>
+      <button class="btn play big tpb" id="playBtn" disabled aria-label="Riproduci">▶</button>
+      <button class="btn tpb" id="ffw" disabled aria-label="Avanti veloce">⏩︎</button>
+      <button class="btn tpb" id="nextItem" disabled aria-label="Elemento successivo">⏭︎</button>
+      <span id="speed"></span>
+    </div>
+    <p class="note" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
+    <div class="row c" style="margin-top:12px">
+      <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
+      <button class="btn sm" id="stopBtn" hidden>■ Ferma esportazione</button>
+    </div>
+    <p class="note" style="text-align:center">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
+    <div id="result" class="row c" style="margin-top:12px" hidden>
+      <button class="btn play" id="saveBtn">⤓ Salva il video</button>
+      <span class="note" id="resInfo"></span>
+    </div>
+  </section>
+
+  <section class="rack">
+    <span class="lbl">4 · Impostazioni</span>
     <div class="set">
       <label><span class="lbl">Formato del video finale</span>
         <select id="fmt">
@@ -162,38 +188,13 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
     </div>
   </section>
 
-  <section class="rack">
-    <span class="lbl">4 · Anteprima ed esportazione</span>
-    <div class="screen"><canvas id="cv" width="1280" height="720"></canvas></div>
-    <input type="range" id="scrub" min="0" max="0" step="0.05" value="0" disabled aria-label="Posizione">
-    <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0 / 0:00.0</span></div>
-    <div class="row c transport">
-      <button class="btn tpb" id="prevItem" disabled aria-label="Elemento precedente">⏮︎</button>
-      <button class="btn tpb" id="rew" disabled aria-label="Indietro veloce">⏪︎</button>
-      <button class="btn play big tpb" id="playBtn" disabled aria-label="Riproduci">▶</button>
-      <button class="btn tpb" id="ffw" disabled aria-label="Avanti veloce">⏩︎</button>
-      <button class="btn tpb" id="nextItem" disabled aria-label="Elemento successivo">⏭︎</button>
-      <span id="speed"></span>
-    </div>
-    <p class="note" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
-    <div class="row c" style="margin-top:12px">
-      <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
-      <button class="btn sm" id="stopBtn" hidden>■ Ferma esportazione</button>
-    </div>
-    <p class="note" style="text-align:center">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
-    <div id="result" class="row c" style="margin-top:12px" hidden>
-      <button class="btn play" id="saveBtn">⤓ Salva il video</button>
-      <span class="note" id="resInfo"></span>
-    </div>
-  </section>
-
   <footer>© 2026 Maurizio Arnone · Tutti i diritti riservati</footer>
 </main>
 <div id="hidden"></div>
 
 <script>
 'use strict';
-const VERSION='1.1.0';
+const VERSION='1.1.1';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
