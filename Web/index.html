@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#0d0e10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ArnoVideo">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{--bg:#0d0e10;--chassis1:#2b2e33;--chassis2:#1e2024;--edge:#3b3f46;--print:#b9bec6;--dim:#7d838c;
  --red:#ff4530;--green:#46ff7a;--amber:#ffb21e;--text:#eceef0}
@@ -406,6 +409,8 @@ $('saveBtn').onclick=async()=>{if(!lastBlob)return;
 (function(){const x=$('cv').getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
   x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);})();
 render();
+// copia sul dispositivo per usarla anche senza internet (solo come pagina web, non nell'app)
+if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
