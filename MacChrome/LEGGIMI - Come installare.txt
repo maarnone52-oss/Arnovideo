@@ -1,0 +1,24 @@
+ARNOVIDEO Chrome - come installarlo
+===================================
+
+È ARNOVIDEO nella versione web, che gira dentro Google Chrome in una
+finestra tutta sua (senza barra degli indirizzi). Consigliato sui Mac
+con macOS High Sierra o Mojave.
+
+Serve Google Chrome. Se manca, l'app apre da sola la pagina per
+scaricarlo.
+
+ATTENZIONE: con Chrome vecchi (fino alla versione 125, per esempio la
+116 di High Sierra) il video finale viene salvato in formato WebM e non
+MP4. Con Chrome 126 o successivo è MP4.
+
+1. Trascina "ARNOVIDEO Chrome" sulla cartella Applicazioni.
+2. La prima volta: clic destro (o ctrl+clic) sull'app > Apri > Apri.
+   Le volte successive basta il doppio clic.
+3. Per averla nel Dock: trascina "ARNOVIDEO Chrome" dalla cartella
+   Applicazioni al Dock.
+
+L'app si aggiorna da sola: apre sempre l'ultima versione di ARNOVIDEO.
+La prima volta serve internet; dopo funziona anche senza.
+
+(c) 2026 Maurizio Arnone

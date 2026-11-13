@@ -1,0 +1,64 @@
+ARNOVIDEO per Mac (macOS 10.15 Catalina e successivi)
+=====================================================
+
+ARNOVIDEO mette in sequenza video e foto su una timeline ed esporta un
+unico video MP4.
+Funziona su macOS 10.15 Catalina e successivi, Mac Intel e chip Apple.
+Su High Sierra e Mojave usa invece "ARNOVIDEO Chrome".
+
+
+PRIMA DI TUTTO (solo Catalina)
+------------------------------
+L'app usa il motore di Safari installato sul Mac. Aggiorna Safari
+all'ultima versione disponibile (15.6.1) da Preferenze di Sistema >
+Aggiornamento Software, altrimenti l'esportazione potrebbe non
+funzionare.
+
+
+INSTALLAZIONE
+-------------
+1. In questa finestra trascina l'icona ArnoVideo sulla cartella
+   "Applicazioni" che vedi accanto.
+   Se il Mac chiede di sostituire una versione già presente, scegli
+   "Sostituisci": i progetti restano.
+2. Chiudi questa finestra ed espelli il disco "ArnoVideo"
+   (clic destro sull'icona del disco > Espelli).
+
+
+PRIMA APERTURA
+--------------
+L'app non viene dall'App Store, quindi la prima volta il Mac la blocca.
+Si sblocca una volta sola:
+
+- da Catalina fino a Sonoma:
+  apri la cartella Applicazioni, clic destro (o Ctrl+clic) su
+  ArnoVideo > Apri > Apri.
+
+- macOS Sequoia o più recente:
+  fai doppio clic sull'app e chiudi l'avviso, poi vai in
+  Impostazioni di Sistema > Privacy e sicurezza, scorri in basso e
+  premi "Apri comunque".
+
+Dalla volta successiva si apre normalmente con doppio clic.
+In alto nella finestra compare il numero di versione.
+
+
+USO VELOCE
+----------
+- Aggiungi video e foto: trascinali nella finestra oppure
+  File > Aggiungi video e foto (Cmd+O).
+- Barra spaziatrice: play / pausa. Frecce sinistra e destra: indietro
+  e avanti di 5 secondi.
+- Cmd+Z annulla, Maiusc+Cmd+Z ripete.
+- File > Esporta MP4 (Cmd+E): alla fine scegli dove salvare il video.
+- Il progetto si salva da solo; File > Progetti recenti per riaprirlo.
+
+
+AGGIORNARE O DISINSTALLARE
+--------------------------
+- Per aggiornare: scarica il nuovo file e ripeti l'installazione,
+  scegliendo "Sostituisci".
+- Per disinstallare: trascina ArnoVideo dalla cartella Applicazioni
+  nel Cestino.
+
+(c) 2026 Maurizio Arnone
