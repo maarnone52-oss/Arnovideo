@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ARNOVIDEO</title>
+<meta name="theme-color" content="#0d0e10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--bg:#0d0e10;--chassis1:#2b2e33;--chassis2:#1e2024;--edge:#3b3f46;--print:#b9bec6;--dim:#7d838c;
+ --red:#ff4530;--green:#46ff7a;--amber:#ffb21e;--text:#eceef0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{touch-action:manipulation;-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 "Helvetica Neue",Helvetica,Arial,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left))}
+.lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--print);font-weight:600}
+.rack{position:relative;background:linear-gradient(180deg,var(--chassis1),var(--chassis2));border:1px solid var(--edge);border-radius:14px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 12px 30px rgba(0,0,0,.55);padding:18px 18px;margin-bottom:16px}
+.rack::before,.rack::after{content:"";position:absolute;top:10px;width:9px;height:9px;border-radius:50%;
+ background:radial-gradient(circle at 35% 35%,#8a8f97,#3b3e43 70%);box-shadow:inset 0 0 0 1px #1a1b1e}
+.rack::before{left:10px}.rack::after{right:10px}
+.rack>.lbl:first-child{display:block;text-align:center;margin:-4px 0 12px}
+/* intestazione */
+.brand{text-align:center;margin:4px 0 18px}
+.wordmark{display:inline-block;font-weight:900;font-size:40px;letter-spacing:.06em;line-height:1;padding:12px 20px;border-radius:12px;
+ background:linear-gradient(180deg,#0a0403,#140806);box-shadow:inset 0 2px 6px rgba(0,0,0,.9),inset 0 0 0 1px #000,0 1px 0 rgba(255,255,255,.06)}
+.wordmark .a{color:#ffb21e;text-shadow:0 0 12px rgba(255,178,30,.55)}
+.wordmark .b{color:#ff4530;text-shadow:0 0 12px rgba(255,69,48,.55)}
+.ver{margin-top:6px;color:var(--dim);font-size:13px;letter-spacing:.04em}
+.ver b{color:#ffb21e;font-weight:800}
+.tag{color:var(--dim);font-size:13px;margin-top:2px}
+/* pulsanti */
+button{font:inherit;color:var(--text);cursor:pointer}
+.btn{min-height:52px;padding:0 20px;font-size:17px;font-weight:650;border-radius:10px;border:1px solid #4b5058;border-bottom:3px solid #121316;
+ background:linear-gradient(180deg,#41454d,#2b2e34);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);letter-spacing:.02em}
+.btn:active{transform:translateY(2px);border-bottom-width:1px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.play{background:linear-gradient(180deg,#ffc44d,#e89a00);color:#1b1305;border-color:#ffcf6b;border-bottom-color:#7a5000}
+.btn.on,.btn.rec{background:linear-gradient(180deg,#ff6a52,#d42a14);border-color:#ff8a77;border-bottom-color:#6e0d03;color:#fff}
+.btn.sm{min-height:40px;padding:0 12px;font-size:15px}
+.btn.xs{min-height:34px;min-width:34px;padding:0 8px;font-size:15px;border-radius:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.c{justify-content:center}
+.grow{flex:1}
+.note{color:var(--dim);font-size:13px;margin-top:8px}
+.err{color:#ff8a80}
+/* display */
+.dwin{background:linear-gradient(180deg,#0a0403,#140806);border-radius:8px;padding:8px 14px;
+ box-shadow:inset 0 2px 6px rgba(0,0,0,.9),inset 0 0 0 1px #000,0 1px 0 rgba(255,255,255,.06);text-align:center}
+.lcd{font:800 30px/1.1 "SF Mono",Menlo,Consolas,monospace;color:#ffb21e;text-shadow:0 0 10px rgba(255,178,30,.5);font-variant-numeric:tabular-nums}
+.lcd.g{color:#46ff7a;text-shadow:0 0 10px rgba(70,255,122,.45)}
+.displays{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+.displays .dwin{min-width:130px}
+/* timeline */
+#tl{display:flex;gap:10px;overflow-x:auto;padding:12px 6px 14px;min-height:190px;background:#101114;border-radius:10px;
+ box-shadow:inset 0 2px 8px rgba(0,0,0,.8);scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+#tl:empty::before{content:attr(data-empty);margin:auto;color:var(--dim);font-size:15px;text-align:center;padding:0 20px}
+.clip{flex:none;width:150px;border-radius:10px;background:linear-gradient(180deg,#34383f,#25282d);border:1px solid #4b5058;
+ box-shadow:0 4px 10px rgba(0,0,0,.5);overflow:hidden;scroll-snap-align:start;position:relative;user-select:none;-webkit-user-select:none}
+.clip.vid{border-top:3px solid #ffb21e}.clip.img{border-top:3px solid #38c6ff}
+.clip.drag{opacity:.35}
+.clip.ghost{position:fixed;z-index:80;pointer-events:none;opacity:.9;transform:scale(1.05);box-shadow:0 14px 30px rgba(0,0,0,.8)}
+.clip.cur{outline:2px solid #46ff7a;outline-offset:-2px}
+.thumb{height:84px;background:#000 center/cover no-repeat;position:relative;touch-action:none;cursor:grab}
+.thumb .n{position:absolute;left:5px;top:4px;background:rgba(0,0,0,.65);border-radius:5px;padding:0 6px;font-size:12px;font-weight:800;color:#ffb21e}
+.thumb .k{position:absolute;right:5px;top:4px;background:rgba(0,0,0,.65);border-radius:5px;padding:0 6px;font-size:11px;color:#fff;letter-spacing:.08em}
+.thumb .grip{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:12px;color:rgba(255,255,255,.75);background:linear-gradient(transparent,rgba(0,0,0,.7));padding-top:8px}
+.cbody{padding:6px 7px 7px}
+.cname{font-size:12px;color:var(--print);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cdur{font:700 14px "SF Mono",Menlo,monospace;color:#ffb21e;margin:2px 0 4px}
+.clip.img .cdur{color:#38c6ff}
+.cbtns{display:flex;gap:4px;justify-content:space-between}
+.stepper{display:flex;align-items:center;gap:4px;margin-bottom:5px}
+.stepper span{flex:1;text-align:center;font:700 14px "SF Mono",Menlo,monospace;color:#38c6ff}
+/* impostazioni */
+.set{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.set label{display:block}
+select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--text);border:1px solid #3a404b;border-radius:8px;padding:0 10px;margin-top:6px}
+/* anteprima */
+.screen{background:#000;border-radius:10px;overflow:hidden;box-shadow:inset 0 0 0 1px #000,0 2px 10px rgba(0,0,0,.6);display:flex;justify-content:center}
+#cv{display:block;max-width:100%;max-height:60vh;background:#000}
+.bar{height:12px;border-radius:6px;background:#0a0403;box-shadow:inset 0 2px 4px #000;overflow:hidden;margin:12px 0 4px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff4530,#ffb21e,#46ff7a)}
+#hidden{position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
+footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-spacing:.08em}
+#result[hidden],#busy[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <div class="wordmark"><span class="a">ARNO</span><span class="b">VIDEO</span></div>
+    <div class="ver">versione <b id="ver"></b></div>
+    <div class="tag">Video e foto in sequenza → un unico MP4</div>
+  </div>
+
+  <section class="rack">
+    <span class="lbl">1 · Carica</span>
+    <div class="row c">
+      <button class="btn play" id="addBtn">＋ Aggiungi video e foto</button>
+      <button class="btn sm" id="clearBtn" disabled>Svuota</button>
+    </div>
+    <input type="file" id="file" accept="video/mp4,video/quicktime,video/*,image/*" multiple hidden>
+    <p class="note" style="text-align:center">Puoi scegliere più file insieme. I nuovi file si aggiungono in fondo alla timeline.</p>
+  </section>
+
+  <section class="rack">
+    <span class="lbl">2 · Timeline</span>
+    <div class="displays">
+      <div class="dwin"><div class="lcd" id="totDur">0:00.0</div><span class="lbl">durata totale</span></div>
+      <div class="dwin"><div class="lcd g" id="totN">0</div><span class="lbl">elementi</span></div>
+    </div>
+    <div id="tl" data-empty="Nessun elemento. Tocca «Aggiungi video e foto»."></div>
+    <p class="note">Trascina un elemento tenendolo per l'immagine per cambiarne la posizione, oppure usa ◀ ▶. Per le foto regola la durata con − e ＋.</p>
+  </section>
+
+  <section class="rack">
+    <span class="lbl">3 · Impostazioni</span>
+    <div class="set">
+      <label><span class="lbl">Formato del video finale</span>
+        <select id="fmt">
+          <option value="auto">Come il primo video</option>
+          <option value="1920x1080">Orizzontale 1920×1080</option>
+          <option value="1080x1920">Verticale 1080×1920</option>
+          <option value="1280x720">Orizzontale 1280×720</option>
+          <option value="720x1280">Verticale 720×1280</option>
+          <option value="1080x1080">Quadrato 1080×1080</option>
+        </select></label>
+      <label><span class="lbl">Adattamento</span>
+        <select id="fit">
+          <option value="contain">Intero, con bande nere</option>
+          <option value="cover">Riempi lo schermo (ritaglia)</option>
+        </select></label>
+      <label><span class="lbl">Durata predefinita delle foto</span>
+        <select id="defDur">
+          <option>2</option><option selected>3</option><option>4</option><option>5</option><option>8</option><option>10</option>
+        </select></label>
+      <label><span class="lbl">Qualità</span>
+        <select id="quality">
+          <option value="5">Normale (file più piccolo)</option>
+          <option value="10" selected>Alta</option>
+          <option value="16">Massima</option>
+        </select></label>
+    </div>
+  </section>
+
+  <section class="rack">
+    <span class="lbl">4 · Anteprima ed esportazione</span>
+    <div class="screen"><canvas id="cv" width="1280" height="720"></canvas></div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0</span></div>
+    <div class="row c" style="margin-top:12px">
+      <button class="btn" id="prevBtn" disabled>▶ Anteprima</button>
+      <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
+      <button class="btn sm" id="stopBtn" hidden>■ Ferma</button>
+    </div>
+    <p class="note" style="text-align:center">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
+    <div id="result" class="row c" style="margin-top:12px" hidden>
+      <button class="btn play" id="saveBtn">⤓ Salva il video</button>
+      <span class="note" id="resInfo"></span>
+    </div>
+  </section>
+
+  <footer>© 2026 Maurizio Arnone · Tutti i diritti riservati</footer>
+</main>
+<div id="hidden"></div>
+
+<script>
+'use strict';
+const VERSION='1.0.0';
+document.getElementById('ver').textContent=VERSION;
+const $=id=>document.getElementById(id);
+const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
+let uid=0,busy=false,stopReq=false,lastBlob=null,lastName='';
+
+/* ---------- utilità ---------- */
+function fmtT(s){s=Math.max(0,s||0);const m=Math.floor(s/60),r=s-m*60;return m+':'+(r<10?'0':'')+r.toFixed(1);}
+function setStatus(t,err){const s=$('status');s.textContent=t;s.className='note'+(err?' err':'');}
+function totalDur(){return items.reduce((a,it)=>a+(it.dur||0),0);}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function once(el,ev,ms){return new Promise((res,rej)=>{let t;const ok=()=>{clearTimeout(t);el.removeEventListener('error',ko);res();};
+  const ko=()=>{clearTimeout(t);el.removeEventListener(ev,ok);rej(new Error('file non leggibile'));};
+  el.addEventListener(ev,ok,{once:true});el.addEventListener('error',ko,{once:true});if(ms)t=setTimeout(()=>{el.removeEventListener(ev,ok);el.removeEventListener('error',ko);rej(new Error('tempo scaduto'));},ms);});}
+function makeVideo(){const v=document.createElement('video');v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');
+  v.preload='auto';v.crossOrigin='anonymous';$('hidden').appendChild(v);return v;}
+
+/* ---------- caricamento ---------- */
+$('addBtn').onclick=()=>{if(!busy)$('file').click();};
+$('file').onchange=async e=>{const files=[...e.target.files];e.target.value='';if(!files.length)return;
+  setStatus('Carico '+files.length+' file…');
+  for(const f of files){
+    const isImg=/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|gif|webp)$/i.test(f.name);
+    const it={id:++uid,type:isImg?'img':'vid',file:f,url:URL.createObjectURL(f),name:f.name,dur:0,w:0,h:0,thumb:''};
+    try{ if(isImg)await loadImage(it); else await loadVideo(it); items.push(it); }
+    catch(err){URL.revokeObjectURL(it.url);setStatus('Non riesco a leggere «'+f.name+'»: '+err.message,true);await sleep(1500);}
+    render();
+  }
+  setStatus('Pronto.');
+};
+async function loadImage(it){
+  const img=new Image();img.src=it.url;await once(img,'load',20000);
+  it.el=img;it.w=img.naturalWidth;it.h=img.naturalHeight;it.dur=parseFloat($('defDur').value);
+  it.thumb=thumbOf(img,it.w,it.h);
+}
+async function loadVideo(it){
+  const v=makeVideo();v.muted=true;v.src=it.url;
+  await once(v,'loadedmetadata',30000);
+  it.dur=v.duration;it.w=v.videoWidth;it.h=v.videoHeight;
+  if(!isFinite(it.dur)||!it.dur)throw new Error('durata sconosciuta');
+  try{v.currentTime=Math.min(0.2,it.dur/2);await once(v,'seeked',8000);if(v.readyState<2)await once(v,'loadeddata',4000);it.thumb=thumbOf(v,it.w,it.h);}catch(e){}
+  v.removeAttribute('src');v.load();v.remove();
+}
+function thumbOf(src,w,h){try{const c=document.createElement('canvas');c.width=240;c.height=135;const x=c.getContext('2d');
+  x.fillStyle='#000';x.fillRect(0,0,240,135);drawFit(x,src,w,h,240,135,'cover');return c.toDataURL('image/jpeg',.7);}catch(e){return '';}}
+
+/* ---------- timeline ---------- */
+function render(){
+  const tl=$('tl');tl.innerHTML='';
+  items.forEach((it,i)=>{
+    const c=document.createElement('div');c.className='clip '+it.type;c.dataset.id=it.id;
+    c.innerHTML='<div class="thumb"'+(it.thumb?' style="background-image:url('+it.thumb+')"':'')+'><span class="n">'+(i+1)+'</span><span class="k">'+(it.type==='img'?'FOTO':'VIDEO')+'</span><span class="grip">⇆ trascina</span></div>'+
+      '<div class="cbody"><div class="cname"></div><div class="cdur">'+fmtT(it.dur)+'</div>'+
+      (it.type==='img'?'<div class="stepper"><button class="btn xs" data-a="minus">−</button><span>'+it.dur.toFixed(1)+' s</span><button class="btn xs" data-a="plus">＋</button></div>':'')+
+      '<div class="cbtns"><button class="btn xs" data-a="left"'+(i===0?' disabled':'')+'>◀</button><button class="btn xs" data-a="del">✕</button><button class="btn xs" data-a="right"'+(i===items.length-1?' disabled':'')+'>▶</button></div></div>';
+    c.querySelector('.cname').textContent=it.name;
+    tl.appendChild(c);
+  });
+  $('totDur').textContent=fmtT(totalDur());$('totN').textContent=items.length;
+  const none=!items.length;$('prevBtn').disabled=none||busy;$('expBtn').disabled=none||busy;$('clearBtn').disabled=none||busy;
+}
+$('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b||busy)return;
+  const id=+b.closest('.clip').dataset.id,i=items.findIndex(x=>x.id===id),it=items[i],a=b.dataset.a;
+  if(a==='left'&&i>0)[items[i-1],items[i]]=[items[i],items[i-1]];
+  else if(a==='right'&&i<items.length-1)[items[i+1],items[i]]=[items[i],items[i+1]];
+  else if(a==='del'){URL.revokeObjectURL(it.url);items.splice(i,1);}
+  else if(a==='plus')it.dur=Math.min(60,Math.round((it.dur+0.5)*2)/2);
+  else if(a==='minus')it.dur=Math.max(0.5,Math.round((it.dur-0.5)*2)/2);
+  render();
+});
+$('clearBtn').onclick=()=>{if(busy||!confirm('Togliere tutti gli elementi dalla timeline?'))return;items.forEach(it=>URL.revokeObjectURL(it.url));items.length=0;render();};
+
+// trascinamento: si tiene premuta l'immagine e si sposta a destra o sinistra
+(function(){let drag=null;
+  $('tl').addEventListener('pointerdown',e=>{const th=e.target.closest('.thumb');if(!th||busy)return;
+    const clip=th.closest('.clip'),r=clip.getBoundingClientRect();e.preventDefault();
+    drag={clip,id:+clip.dataset.id,dx:e.clientX-r.left,dy:e.clientY-r.top,ghost:null,sx:e.clientX,sy:e.clientY,pid:e.pointerId};
+    try{th.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  window.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.pid)return;
+    if(!drag.ghost){if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<8)return;
+      drag.ghost=drag.clip.cloneNode(true);drag.ghost.classList.add('ghost');drag.ghost.style.width=drag.clip.offsetWidth+'px';document.body.appendChild(drag.ghost);drag.clip.classList.add('drag');}
+    drag.ghost.style.left=(e.clientX-drag.dx)+'px';drag.ghost.style.top=(e.clientY-drag.dy)+'px';
+    const tl=$('tl'),tr=tl.getBoundingClientRect();         // scorrimento automatico ai bordi
+    if(e.clientX<tr.left+40)tl.scrollLeft-=12;else if(e.clientX>tr.right-40)tl.scrollLeft+=12;
+    const others=[...tl.children].filter(c=>c!==drag.clip);let before=null;
+    for(const c of others){const r=c.getBoundingClientRect();if(e.clientX<r.left+r.width/2){before=c;break;}}
+    if(before)tl.insertBefore(drag.clip,before);else tl.appendChild(drag.clip);
+  });
+  const end=e=>{if(!drag||(e&&e.pointerId!==drag.pid))return;
+    if(drag.ghost){drag.ghost.remove();const order=[...$('tl').children].map(c=>+c.dataset.id);
+      items.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));}
+    drag=null;render();};
+  window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
+})();
+
+/* ---------- disegno ---------- */
+function drawFit(x,src,sw,sh,W,H,mode){if(!sw||!sh)return;
+  const k=mode==='cover'?Math.max(W/sw,H/sh):Math.min(W/sw,H/sh),w=sw*k,h=sh*k;
+  x.drawImage(src,(W-w)/2,(H-h)/2,w,h);}
+function outSize(){
+  const v=$('fmt').value;
+  if(v!=='auto'){const [w,h]=v.split('x').map(Number);return {w,h};}
+  const first=items.find(i=>i.type==='vid')||items[0];let w=first.w||1280,h=first.h||720;
+  const k=Math.min(1,1920/Math.max(w,h));w=Math.round(w*k/2)*2;h=Math.round(h*k/2)*2;return {w,h};
+}
+
+/* ---------- motore di riproduzione (anteprima ed esportazione) ---------- */
+let actx=null,dest=null,mon=null;
+function audioInit(){
+  if(actx)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+  actx=new AC();dest=actx.createMediaStreamDestination?actx.createMediaStreamDestination():null;
+  mon=actx.createGain();mon.connect(actx.destination);
+}
+const players=[];             // due lettori che si alternano: il successivo si prepara mentre suona l'attuale
+function player(i){
+  if(!players[i]){const v=makeVideo();const p={v,src:null};
+    if(actx){try{p.src=actx.createMediaElementSource(v);if(dest)p.src.connect(dest);p.src.connect(mon);}catch(e){p.src=null;}}
+    players[i]=p;}
+  return players[i];
+}
+async function prepare(p,it){
+  p.v.muted=!actx||!p.src;          // senza motore audio non si può registrare il suono
+  if(p.v.dataset.url!==it.url){p.v.src=it.url;p.v.dataset.url=it.url;}
+  p.v.currentTime=0;
+  if(p.v.readyState<3){try{await once(p.v,'canplay',20000);}catch(e){}}
+}
+
+async function runSequence(rec){
+  const cv=$('cv'),{w,h}=outSize();cv.width=w;cv.height=h;
+  const x=cv.getContext('2d'),mode=$('fit').value,total=totalDur();
+  audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
+  if(mon)mon.gain.value=rec?0.0001:1;    // in esportazione non si sente (resta registrato)
+  let done=0,pi=0;
+  const clear=()=>{x.fillStyle='#000';x.fillRect(0,0,w,h);};
+  const tick=t=>{$('clock').textContent=fmtT(t);$('prog').style.width=(total?Math.min(100,t/total*100):0)+'%';};
+  const mark=i=>[...$('tl').children].forEach((c,k)=>c.classList.toggle('cur',k===i));
+  // prepara il primo video
+  const nextVid=k=>{for(let j=k;j<items.length;j++)if(items[j].type==='vid')return j;return -1;};
+  let pending=null;{const j=nextVid(0);if(j>=0)pending={j,prom:prepare(player(0),items[j]),p:player(0)};}
+  if(rec)rec.start(1000);
+  for(let i=0;i<items.length&&!stopReq;i++){
+    const it=items[i];mark(i);setStatus((rec?'Esporto':'Anteprima')+' · '+(i+1)+'/'+items.length+' · '+it.name);
+    if(it.type==='img'){
+      const t0=performance.now();
+      while(!stopReq){const el=(performance.now()-t0)/1000;if(el>=it.dur)break;
+        clear();drawFit(x,it.el,it.w,it.h,w,h,mode);tick(done+el);await new Promise(r=>requestAnimationFrame(r));}
+      done+=it.dur;continue;
+    }
+    // video
+    let p;if(pending&&pending.j===i){await pending.prom;p=pending.p;}else{p=player(pi);await prepare(p,it);}
+    pi=players.indexOf(p);
+    // prepara già il video successivo nell'altro lettore
+    const nj=nextVid(i+1);pending=nj>=0?{j:nj,p:player(1-pi)}:null;if(pending)pending.prom=prepare(pending.p,items[nj]);
+    const v=p.v;
+    try{await v.play();}catch(e){setStatus('Il video «'+it.name+'» non parte: '+e.message,true);done+=it.dur;continue;}
+    await new Promise(res=>{let fin=false;
+      const stop=()=>{if(fin)return;fin=true;res();};
+      v.addEventListener('ended',stop,{once:true});
+      const loop=()=>{if(fin)return;if(stopReq){v.pause();return stop();}
+        if(v.readyState>=2){clear();drawFit(x,v,v.videoWidth,v.videoHeight,w,h,mode);}
+        tick(done+v.currentTime);
+        if(v.currentTime>=it.dur-0.02&&v.paused)return stop();
+        requestAnimationFrame(loop);};
+      requestAnimationFrame(loop);
+    });
+    v.pause();done+=it.dur;
+  }
+  mark(-1);
+  if(rec&&rec.state!=='inactive'){await sleep(150);rec.stop();}
+  if(mon)mon.gain.value=1;
+}
+
+function pickMime(){
+  if(!window.MediaRecorder)return null;
+  const list=['video/mp4;codecs="avc1.640028,mp4a.40.2"','video/mp4;codecs="avc1.42E01F,mp4a.40.2"','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4;codecs=avc1','video/mp4',
+    'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for(const m of list){try{if(MediaRecorder.isTypeSupported(m))return m;}catch(e){}}
+  return '';
+}
+function setBusy(b){busy=b;$('stopBtn').hidden=!b;$('addBtn').disabled=b;render();}
+
+$('prevBtn').onclick=async()=>{if(busy||!items.length)return;stopReq=false;setBusy(true);
+  try{await runSequence(null);setStatus(stopReq?'Anteprima fermata.':'Anteprima finita.');}catch(e){setStatus('Errore: '+e.message,true);}
+  setBusy(false);};
+$('stopBtn').onclick=()=>{stopReq=true;};
+
+$('expBtn').onclick=async()=>{if(busy||!items.length)return;
+  const mime=pickMime(),cv=$('cv');
+  if(mime===null||!cv.captureStream){setStatus('Questo browser non sa registrare video. Usa Safari su iPhone o Chrome aggiornato.',true);return;}
+  stopReq=false;setBusy(true);$('result').hidden=true;
+  try{
+    audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
+    const {w,h}=outSize();cv.width=w;cv.height=h;
+    const stream=cv.captureStream(30);
+    if(dest)dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+    const q=+$('quality').value,bps=Math.round(q*1e6*(w*h)/(1920*1080));
+    const opt={videoBitsPerSecond:Math.max(2e6,bps),audioBitsPerSecond:192000};if(mime)opt.mimeType=mime;
+    const rec=new MediaRecorder(stream,opt),chunks=[];
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+    const stopped=new Promise(r=>rec.onstop=r);
+    await runSequence(rec);await stopped;
+    stream.getVideoTracks().forEach(t=>t.stop());
+    if(stopReq){setStatus('Esportazione annullata.');}
+    else{
+      const type=(rec.mimeType||mime||'video/mp4').split(';')[0],isMp4=/mp4/.test(type);
+      lastBlob=new Blob(chunks,{type});
+      const d=new Date(),p2=n=>String(n).padStart(2,'0');
+      lastName='ARNOVIDEO-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes())+(isMp4?'.mp4':'.webm');
+      $('resInfo').textContent=lastName+' · '+(lastBlob.size/1048576).toFixed(1)+' MB · '+w+'×'+h;
+      $('result').hidden=false;
+      setStatus(isMp4?'Video pronto. Tocca «Salva il video».':'Pronto, ma questo browser registra solo in WebM, non MP4.',!isMp4);
+    }
+  }catch(e){setStatus('Errore durante l\'esportazione: '+e.message,true);}
+  setBusy(false);
+};
+
+/* ---------- salvataggio ---------- */
+function nativeSave(){try{return window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.save;}catch(e){return null;}}
+async function nativeSaveChunks(ns,blob,name){   // nell'app il file passa a pezzi da 4 MB
+  const CH=4*1024*1024,count=Math.max(1,Math.ceil(blob.size/CH)),id=Date.now()+'-'+Math.random().toString(36).slice(2);
+  const b64=part=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result);res(s.slice(s.indexOf(',')+1));};r.onerror=()=>rej(r.error);r.readAsDataURL(part);});
+  for(let i=0;i<count;i++){setStatus('Preparo il salvataggio… '+Math.round(i/count*100)+'%');
+    const s=await b64(blob.slice(i*CH,(i+1)*CH));ns.postMessage({name,id,index:i,count,base64:s});await sleep(0);}
+  setStatus('Scegli dove salvare (per la galleria: «Salva video»).');
+}
+$('saveBtn').onclick=async()=>{if(!lastBlob)return;
+  const ns=nativeSave();if(ns)return nativeSaveChunks(ns,lastBlob,lastName);
+  try{const f=new File([lastBlob],lastName,{type:lastBlob.type});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(lastBlob);a.download=lastName;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
+};
+
+// schermo nero iniziale
+(function(){const x=$('cv').getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
+  x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);})();
+render();
+</script>
+</body>
+</html>
