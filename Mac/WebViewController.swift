@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import AVFoundation
 
 /// Mostra ARNOVIDEO (Web/index.html): sceglie video e foto con il pannello del Finder
 /// e salva il video esportato con la finestra "Salva con nome".
@@ -190,10 +191,49 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                                 DispatchQueue.main.async { self?.renderFinished(result, name: name, renderer: renderer) }
                             })
 
+        case "thumbs":
+            // miniature preparate dal Mac (AVFoundation): primo fotogramma + striscia
+            let id = body["id"] ?? ""
+            let times = (body["times"] as? [NSNumber])?.map { $0.doubleValue } ?? []
+            guard let key = body["key"] as? String, let url = fileURL(for: key), !times.isEmpty else {
+                js("arnoNative.reply(\(Self.json(id)),null)"); return
+            }
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let list = Self.makeThumbs(url: url, times: times)
+                self?.js("arnoNative.reply(\(Self.json(id)),\(Self.json(list)))")
+            }
+
         case "cancel":
             renderer?.cancel()
 
         default: break
+        }
+    }
+
+    private static func makeThumbs(url: URL, times: [Double]) -> [String] {
+        let asset = AVURLAsset(url: url)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true          // video girati: miniatura dritta
+        gen.maximumSize = CGSize(width: 320, height: 180)
+        gen.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 10)
+        gen.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 10)
+        return times.map { t in
+            guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) else { return "" }
+            // dentro un riquadro 16:9 nero, intero (come nella pagina)
+            let W = 320, H = 180
+            guard let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return "" }
+            ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+            let iw = CGFloat(cg.width), ih = CGFloat(cg.height)
+            let k = min(CGFloat(W) / iw, CGFloat(H) / ih)
+            ctx.interpolationQuality = .high
+            ctx.draw(cg, in: CGRect(x: (CGFloat(W) - iw * k) / 2, y: (CGFloat(H) - ih * k) / 2, width: iw * k, height: ih * k))
+            guard let out = ctx.makeImage(),
+                  let jpg = NSBitmapImageRep(cgImage: out).representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+            else { return "" }
+            return "data:image/jpeg;base64," + jpg.base64EncodedString()
         }
     }
 

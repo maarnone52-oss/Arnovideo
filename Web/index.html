@@ -311,7 +311,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.8.0';
+const VERSION='1.8.1';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -328,7 +328,7 @@ function once(el,ev,ms){return new Promise((res,rej)=>{let t;const ok=()=>{clear
   const ko=()=>{clearTimeout(t);el.removeEventListener(ev,ok);rej(new Error('file non leggibile'));};
   el.addEventListener(ev,ok,{once:true});el.addEventListener('error',ko,{once:true});if(ms)t=setTimeout(()=>{el.removeEventListener(ev,ok);el.removeEventListener('error',ko);rej(new Error('tempo scaduto'));},ms);});}
 function makeVideo(){const v=document.createElement('video');v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');
-  v.preload='auto';v.crossOrigin='anonymous';$('hidden').appendChild(v);return v;}
+  v.preload='auto';$('hidden').appendChild(v);return v;}
 
 /* ---------- caricamento ---------- */
 $('addBtn').onclick=()=>{if(!busy)$('file').click();};
@@ -357,7 +357,7 @@ async function loadVideo(it){
   await once(v,'loadedmetadata',30000);
   it.dur=v.duration;it.w=v.videoWidth;it.h=v.videoHeight;
   if(!isFinite(it.dur)||!it.dur)throw new Error('durata sconosciuta');
-  it.thumb=await firstFrame(v,it.w,it.h);it.thumbV=2;
+  it.thumbV=2;   // miniatura e striscia le prepara subito dopo la coda in sottofondo
   v.removeAttribute('src');v.load();v.remove();
 }
 // miniatura = primo fotogramma del video, intero (senza ritagli)
@@ -365,8 +365,7 @@ async function firstFrame(v,w,h){
   try{
     if(v.readyState<2){try{await once(v,'loadeddata',6000);}catch(e){}}
     v.currentTime=0.001;try{await once(v,'seeked',6000);}catch(e){}
-    if(v.readyState<2){   // su iPhone a volte il fotogramma arriva solo dopo un attimo di riproduzione
-      try{await v.play();v.pause();v.currentTime=0.001;await once(v,'seeked',4000);}catch(e){}}
+    await primeVideo(v);v.currentTime=0.001;try{await once(v,'seeked',4000);}catch(e){}
     if(v.requestVideoFrameCallback)await new Promise(r=>{let ok=false;v.requestVideoFrameCallback(()=>{ok=true;r();});setTimeout(()=>{if(!ok)r();},300);});
     return v.readyState>=2?thumbOf(v,w,h):'';
   }catch(e){return '';}
@@ -385,24 +384,46 @@ function stripTimes(d){return Array.from({length:STRIP_N},(_,k)=>Math.min(Math.m
 function stripHTML(it){const ts=stripTimes(it.dur),ok=it.strip&&it.strip.length===STRIP_N;
   return '<div class="strip'+(ok?'':' wait')+'">'+ts.map((t,k)=>'<i data-t="'+t.toFixed(2)+'"'+(ok?' style="background-image:url('+it.strip[k]+')"':'')+'><span>'+(it.dur<20?fmtT(t):fmtT(t).replace(/\.\d$/,''))+'</span></i>').join('')+'</div>';}
 const stripQ=[];let stripRunning=false;
-function queueStrips(){media.forEach(it=>{if(it.type==='vid'&&!(it.strip&&it.strip.length===STRIP_N)&&!stripQ.includes(it))stripQ.push(it);});runStrips();}
+// prende un fotogramma: su iPhone e Mac (Safari) il video va fatto partire un attimo prima, altrimenti il fotogramma resta vuoto
+async function primeVideo(v){if(v.__primed)return;v.__primed=true;
+  try{v.muted=true;const p=v.play();if(p&&p.then)await Promise.race([p.catch(()=>{}),sleep(1500)]);
+    await Promise.race([new Promise(r=>v.addEventListener('timeupdate',r,{once:true})),sleep(800)]);}catch(e){}
+  try{v.pause();}catch(e){}}
+async function grabAt(v,t,W,H){
+  try{v.currentTime=Math.max(0.001,t);try{await once(v,'seeked',5000);}catch(e){}
+    if(v.requestVideoFrameCallback)await Promise.race([new Promise(r=>v.requestVideoFrameCallback(()=>r())),sleep(300)]);
+    else await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    if(v.readyState<2||!v.videoWidth)return '';
+    const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,W,H);
+    drawFit(x,v,v.videoWidth,v.videoHeight,W,H,'contain');return c.toDataURL('image/jpeg',.7);
+  }catch(e){return '';}}
+// sul Mac le miniature le prepara il Mac stesso (più affidabile)
+let thumbReq=0;
+function nativeThumbs(m,times){const nr=nativeRender();if(!nr)return Promise.resolve(null);
+  const id='t'+(++thumbReq);
+  return new Promise(r=>{const to=setTimeout(()=>{delete arnoNative._wait[id];r(null);},20000);
+    arnoNative._wait[id]=a=>{clearTimeout(to);r(a&&a.length===times.length&&a.every(Boolean)?a:null);};
+    nr.postMessage({cmd:'thumbs',id,key:m.name+'|'+((m.file&&m.file.size)||m.size||0),times});});}
 async function runStrips(){if(stripRunning)return;stripRunning=true;
   while(stripQ.length){
     while(exporting||playing)await sleep(500);          // non disturba riproduzione ed esportazione
     const it=stripQ.shift();if(!media.includes(it))continue;
-    const v=makeVideo();v.muted=true;v.src=it.url;const out=[];
-    try{await once(v,'loadedmetadata',20000);
-      if(v.readyState<2){try{await once(v,'loadeddata',5000);}catch(e){}}
-      if(v.readyState<2){try{await v.play();v.pause();}catch(e){}}
-      for(const t of stripTimes(it.dur)){v.currentTime=Math.max(0.001,t);try{await once(v,'seeked',5000);}catch(e){}
-        const c=document.createElement('canvas');c.width=160;c.height=90;const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,160,90);
-        if(v.readyState>=2)drawFit(x,v,v.videoWidth,v.videoHeight,160,90,'contain');out.push(c.toDataURL('image/jpeg',.6));}
-    }catch(e){}
-    v.removeAttribute('src');v.load();v.remove();
-    if(out.length===STRIP_N){it.strip=out;if(!it.thumb)it.thumb=out[0];
-      const el=$('lib').querySelector('.clip[data-mid="'+it.mid+'"] .strip');if(el)el.outerHTML=stripHTML(it);renderTrack();scheduleSave();}
+    const times=[0.001,...stripTimes(it.dur).map(t=>Math.max(0.001,t))];
+    let res=await nativeThumbs(it,times);
+    if(!res){const v=makeVideo();v.muted=true;v.src=it.url;res=[];
+      try{await once(v,'loadedmetadata',20000);if(v.readyState<2){try{await once(v,'loadeddata',5000);}catch(e){}}
+        await primeVideo(v);
+        res.push(await grabAt(v,0.001,240,135));
+        for(const t of times.slice(1))res.push(await grabAt(v,t,160,90));
+      }catch(e){}
+      v.removeAttribute('src');v.load();v.remove();}
+    if(res[0])it.thumb=res[0];
+    const st=res.slice(1);if(st.length===STRIP_N&&st.every(Boolean))it.strip=st;
+    else if(!it.stripTries){it.stripTries=1;setTimeout(()=>{if(media.includes(it)&&!it.strip){stripQ.push(it);runStrips();}},4000);}  // un secondo tentativo
+    renderLib();renderTrack();scheduleSave();
   }
   stripRunning=false;}
+function queueStrips(){media.forEach(it=>{if(it.type==='vid'&&(!it.thumb||!(it.strip&&it.strip.length===STRIP_N))&&!stripQ.includes(it))stripQ.push(it);});runStrips();}
 
 /* ---------- finestra di anteprima sganciabile e ridimensionabile ---------- */
 const pvs={float:false,x:0,y:0,w:0,h:0};
@@ -476,7 +497,7 @@ function renderTrack(){
     d.className='tclip '+c.type+(c.id===selId?' sel':'');d.dataset.id=c.id;d.style.width=L.w+'px';
     const tw=Math.round(84*16/9),n=Math.max(1,Math.ceil(L.w/tw));let tiles='';
     for(let k=0;k<n;k++){const src=c.type==='vid'&&c.strip&&c.strip.length?c.strip[Math.min(c.strip.length-1,Math.floor(k/n*c.strip.length))]:c.thumb;
-      tiles+='<i style="width:'+tw+'px'+(src?';background-image:url('+src+')':'')+'"></i>';}
+      tiles+='<i style="width:'+tw+'px'+(src?';background-image:url('+src+')':';background-color:#22252b')+'"></i>';}
     d.innerHTML='<div class="tiles">'+tiles+'</div><div class="tname"></div><div class="tdur">'+fmtT(c.dur)+'</div><div class="tgrip">⠿</div>';
     d.querySelector('.tname').textContent=(i+1)+' · '+c.name;lane.appendChild(d);});
   // righello
@@ -927,7 +948,7 @@ async function openProject(id){
   curProj={id:rec.id,name:rec.name,created:rec.created};showProj();playT=rec.playT||0;resetHistory();
   restoring=false;render();localStorage.setItem('arnovideo-last',rec.id);
   (async()=>{const old=media.filter(i=>i.thumbV!==2);let n=0;   // miniature vecchie: rifatte col primo fotogramma
-    for(const it of old){if(it.type==='vid')await refreshThumb(it);else if(it.el){it.thumb=thumbOf(it.el,it.w,it.h);it.thumbV=2;}n++;}
+    for(const it of old){if(it.type==='vid'){it.thumb='';it.strip=null;it.thumbV=2;}else if(it.el){it.thumb=thumbOf(it.el,it.w,it.h);it.thumbV=2;}n++;}queueStrips();
     if(n&&!busy){render();}})();
   queueStrips();
   setStatus(missing?missing+' elementi non sono stati trovati nell\'archivio.':'Progetto «'+rec.name+'» aperto.',!!missing);
