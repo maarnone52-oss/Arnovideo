@@ -85,6 +85,20 @@ select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--
 #cv{display:block;max-width:100%;max-height:60vh;background:#000}
 .bar{height:12px;border-radius:6px;background:#0a0403;box-shadow:inset 0 2px 4px #000;overflow:hidden;margin:12px 0 4px}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff4530,#ffb21e,#46ff7a)}
+/* trasporto */
+#scrub{-webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;margin:10px 0 2px;touch-action:none}
+#scrub::-webkit-slider-runnable-track{height:12px;border-radius:6px;background:linear-gradient(90deg,#ff4530,#ffb21e var(--p,0%),#0a0403 var(--p,0%));box-shadow:inset 0 2px 4px #000}
+#scrub::-moz-range-track{height:12px;border-radius:6px;background:#0a0403}
+#scrub::-moz-range-progress{height:12px;border-radius:6px;background:linear-gradient(90deg,#ff4530,#ffb21e)}
+#scrub::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:-9px;border-radius:50%;border:1px solid #ffcf6b;
+ background:radial-gradient(circle at 35% 35%,#ffe2a0,#e89a00 70%);box-shadow:0 2px 6px rgba(0,0,0,.7)}
+#scrub::-moz-range-thumb{width:28px;height:28px;border-radius:50%;border:1px solid #ffcf6b;background:#e89a00}
+#scrub:disabled{opacity:.4}
+.transport{margin-top:10px;gap:8px}
+.transport .btn{min-width:58px;font-size:22px;padding:0 12px;touch-action:none;-webkit-user-select:none;user-select:none}
+.transport .btn.big{min-width:80px;font-size:24px}
+.transport .btn.hold{background:linear-gradient(180deg,#ffc44d,#e89a00);color:#1b1305;border-color:#ffcf6b}
+#speed{font:800 16px "SF Mono",Menlo,monospace;color:#46ff7a;min-width:56px;text-align:center;text-shadow:0 0 8px rgba(70,255,122,.5)}
 #hidden{position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
 footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-spacing:.08em}
 #result[hidden],#busy[hidden]{display:none}
@@ -151,12 +165,20 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
   <section class="rack">
     <span class="lbl">4 · Anteprima ed esportazione</span>
     <div class="screen"><canvas id="cv" width="1280" height="720"></canvas></div>
-    <div class="bar"><i id="prog"></i></div>
-    <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0</span></div>
+    <input type="range" id="scrub" min="0" max="0" step="0.05" value="0" disabled aria-label="Posizione">
+    <div class="row" style="justify-content:space-between"><span class="note" id="status" style="margin:0">Pronto.</span><span class="lcd" id="clock" style="font-size:18px">0:00.0 / 0:00.0</span></div>
+    <div class="row c transport">
+      <button class="btn tpb" id="prevItem" disabled aria-label="Elemento precedente">⏮︎</button>
+      <button class="btn tpb" id="rew" disabled aria-label="Indietro veloce">⏪︎</button>
+      <button class="btn play big tpb" id="playBtn" disabled aria-label="Riproduci">▶</button>
+      <button class="btn tpb" id="ffw" disabled aria-label="Avanti veloce">⏩︎</button>
+      <button class="btn tpb" id="nextItem" disabled aria-label="Elemento successivo">⏭︎</button>
+      <span id="speed"></span>
+    </div>
+    <p class="note" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
     <div class="row c" style="margin-top:12px">
-      <button class="btn" id="prevBtn" disabled>▶ Anteprima</button>
       <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
-      <button class="btn sm" id="stopBtn" hidden>■ Ferma</button>
+      <button class="btn sm" id="stopBtn" hidden>■ Ferma esportazione</button>
     </div>
     <p class="note" style="text-align:center">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
     <div id="result" class="row c" style="margin-top:12px" hidden>
@@ -171,7 +193,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.0.0';
+const VERSION='1.1.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -230,7 +252,10 @@ function render(){
     tl.appendChild(c);
   });
   $('totDur').textContent=fmtT(totalDur());$('totN').textContent=items.length;
-  const none=!items.length;$('prevBtn').disabled=none||busy;$('expBtn').disabled=none||busy;$('clearBtn').disabled=none||busy;
+  const none=!items.length;$('expBtn').disabled=none||busy;$('clearBtn').disabled=none||busy;
+  document.querySelectorAll('.tpb').forEach(b=>b.disabled=none||exporting);$('scrub').disabled=none||exporting;
+  $('scrub').max=totalDur();
+  if(!busy){if(none){setT(0);blank();}else showFrame(Math.min(playT,totalDur()));}
 }
 $('tl').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b||busy)return;
   const id=+b.closest('.clip').dataset.id,i=items.findIndex(x=>x.id===id),it=items[i],a=b.dataset.a;
@@ -299,23 +324,26 @@ async function prepare(p,it){
   if(p.v.readyState<3){try{await once(p.v,'canplay',20000);}catch(e){}}
 }
 
-async function runSequence(rec){
+async function runSequence(rec,startT=0){
   const cv=$('cv'),{w,h}=outSize();cv.width=w;cv.height=h;
   const x=cv.getContext('2d'),mode=$('fit').value,total=totalDur();
   audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
   if(mon)mon.gain.value=rec?0.0001:1;    // in esportazione non si sente (resta registrato)
   let done=0,pi=0;
   const clear=()=>{x.fillStyle='#000';x.fillRect(0,0,w,h);};
-  const tick=t=>{$('clock').textContent=fmtT(t);$('prog').style.width=(total?Math.min(100,t/total*100):0)+'%';};
-  const mark=i=>[...$('tl').children].forEach((c,k)=>c.classList.toggle('cur',k===i));
+  const tick=t=>setT(t);
+  const mark=markCur;
+  // da dove si parte
+  const L=locate(startT)||{i:0,off:0,acc:0};let first=L.i,off=L.off;done=L.acc;
+  if(items[first]&&off>=items[first].dur-0.05&&first<items.length-1){first++;done+=items[first-1].dur;off=0;}
   // prepara il primo video
   const nextVid=k=>{for(let j=k;j<items.length;j++)if(items[j].type==='vid')return j;return -1;};
-  let pending=null;{const j=nextVid(0);if(j>=0)pending={j,prom:prepare(player(0),items[j]),p:player(0)};}
+  let pending=null;{const j=nextVid(first);if(j>=0)pending={j,prom:prepare(player(0),items[j]),p:player(0)};}
   if(rec)rec.start(1000);
-  for(let i=0;i<items.length&&!stopReq;i++){
-    const it=items[i];mark(i);setStatus((rec?'Esporto':'Anteprima')+' · '+(i+1)+'/'+items.length+' · '+it.name);
+  for(let i=first;i<items.length&&!stopReq;i++){
+    const it=items[i],o=i===first?off:0;mark(i);setStatus((rec?'Esporto':'Riproduzione')+' · '+(i+1)+'/'+items.length+' · '+it.name);
     if(it.type==='img'){
-      const t0=performance.now();
+      const t0=performance.now()-o*1000;
       while(!stopReq){const el=(performance.now()-t0)/1000;if(el>=it.dur)break;
         clear();drawFit(x,it.el,it.w,it.h,w,h,mode);tick(done+el);await new Promise(r=>requestAnimationFrame(r));}
       done+=it.dur;continue;
@@ -326,6 +354,7 @@ async function runSequence(rec){
     // prepara già il video successivo nell'altro lettore
     const nj=nextVid(i+1);pending=nj>=0?{j:nj,p:player(1-pi)}:null;if(pending)pending.prom=prepare(pending.p,items[nj]);
     const v=p.v;
+    if(o>0){v.currentTime=o;try{await once(v,'seeked',4000);}catch(e){}}
     try{await v.play();}catch(e){setStatus('Il video «'+it.name+'» non parte: '+e.message,true);done+=it.dur;continue;}
     await new Promise(res=>{let fin=false;
       const stop=()=>{if(fin)return;fin=true;res();};
@@ -339,7 +368,6 @@ async function runSequence(rec){
     });
     v.pause();done+=it.dur;
   }
-  mark(-1);
   if(rec&&rec.state!=='inactive'){await sleep(150);rec.stop();}
   if(mon)mon.gain.value=1;
 }
@@ -351,17 +379,91 @@ function pickMime(){
   for(const m of list){try{if(MediaRecorder.isTypeSupported(m))return m;}catch(e){}}
   return '';
 }
-function setBusy(b){busy=b;$('stopBtn').hidden=!b;$('addBtn').disabled=b;render();}
-
-$('prevBtn').onclick=async()=>{if(busy||!items.length)return;stopReq=false;setBusy(true);
-  try{await runSequence(null);setStatus(stopReq?'Anteprima fermata.':'Anteprima finita.');}catch(e){setStatus('Errore: '+e.message,true);}
-  setBusy(false);};
+function setBusy(b,exp){busy=b;exporting=!!(b&&exp);$('stopBtn').hidden=!exporting;$('addBtn').disabled=b;render();}
 $('stopBtn').onclick=()=>{stopReq=true;};
 
-$('expBtn').onclick=async()=>{if(busy||!items.length)return;
+/* ---------- posizione, fotogramma e comandi di trasporto ---------- */
+let playT=0,playing=false,exporting=false,runP=null;
+function setT(t){const tot=totalDur();playT=Math.max(0,Math.min(tot,t||0));const sc=$('scrub');sc.max=tot;sc.value=playT;
+  sc.style.setProperty('--p',(tot?playT/tot*100:0)+'%');$('clock').textContent=fmtT(playT)+' / '+fmtT(tot);}
+function locate(t){let acc=0;for(let i=0;i<items.length;i++){const d=items[i].dur;
+  if(t<acc+d||i===items.length-1)return {i,off:Math.max(0,Math.min(d,t-acc)),acc};acc+=d;}return null;}
+function startOf(i){let a=0;for(let k=0;k<i;k++)a+=items[k].dur;return a;}
+function markCur(i){[...$('tl').children].forEach((c,k)=>c.classList.toggle('cur',k===i));}
+function blank(){const cv=$('cv');cv.width=1280;cv.height=720;const x=cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
+  x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);markCur(-1);}
+const pv=makeVideo();pv.muted=true;           // lettore muto solo per mostrare i fotogrammi
+let pvUnlocked=false;
+function unlockPv(){if(pvUnlocked)return;pvUnlocked=true;try{const r=pv.play();if(r&&r.then)r.then(()=>pv.pause()).catch(()=>{});}catch(e){}}
+let seekBusy=false,seekWant=null;
+function showFrame(t){setT(t);seekWant=playT;if(seekBusy)return;seekBusy=true;
+  (async()=>{while(seekWant!==null){const tt=seekWant;seekWant=null;try{await drawAt(tt);}catch(e){}}seekBusy=false;})();}
+async function drawAt(t){
+  if(!items.length)return blank();
+  const L=locate(t),it=items[L.i];markCur(L.i);
+  const cv=$('cv'),{w,h}=outSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  const x=cv.getContext('2d'),mode=$('fit').value;
+  if(it.type==='img'){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,it.el,it.w,it.h,w,h,mode);return;}
+  if(pv.dataset.url!==it.url){pv.src=it.url;pv.dataset.url=it.url;await once(pv,'loadedmetadata',15000);}
+  const target=Math.min(L.off,Math.max(0,it.dur-0.05));
+  if(Math.abs(pv.currentTime-target)>0.01||pv.readyState<2){pv.currentTime=target;try{await once(pv,'seeked',4000);}catch(e){}}
+  if(playing||exporting)return;      // nel frattempo è ripartita la riproduzione
+  if(pv.readyState>=2){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,pv,pv.videoWidth,pv.videoHeight,w,h,mode);}
+}
+async function startPlay(){
+  if(playing||busy||!items.length)return;
+  if(playT>=totalDur()-0.05)setT(0);
+  stopReq=false;playing=true;setBusy(true);$('playBtn').textContent='❚❚';
+  runP=runSequence(null,playT).catch(e=>setStatus('Errore: '+e.message,true));
+  await runP;
+  const stopped=stopReq;playing=false;runP=null;$('playBtn').textContent='▶';setBusy(false);
+  setStatus(stopped?'In pausa.':'Fine.');
+}
+async function stopPlay(){if(!playing)return;stopReq=true;await runP;while(playing)await sleep(10);}
+$('playBtn').onclick=()=>{unlockPv();if(playing)stopPlay();else startPlay();};
+
+async function jumpTo(t){const was=playing;await stopPlay();showFrame(t);if(was){while(seekBusy)await sleep(10);startPlay();}}
+$('prevItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
+  const s=startOf(L.i);jumpTo(playT-s>1||L.i===0?s:startOf(L.i-1));};
+$('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
+  jumpTo(L.i<items.length-1?startOf(L.i+1):totalDur());};
+
+// ⏪ ⏩: tocco = salto di 5 s; tenendo premuto = scorrimento veloce con le immagini
+(function(){let hold=null;
+  const begin=async(e,dir)=>{e.preventDefault();if(!items.length||exporting||hold)return;unlockPv();
+    const btn=e.currentTarget;hold={dir,btn,was:playing,scan:false,t0:performance.now(),timer:null,pid:e.pointerId};
+    try{btn.setPointerCapture(e.pointerId);}catch(_){}
+    await stopPlay();if(!hold)return;
+    hold.timer=setInterval(()=>{if(!hold)return;const el=(performance.now()-hold.t0)/1000;if(el<0.3)return;
+      if(!hold.scan){hold.scan=true;hold.btn.classList.add('hold');}
+      const sp=el<1.5?4:el<3?8:el<5?16:32;           // velocità: ×4, ×8, ×16, ×32
+      $('speed').textContent=(hold.dir>0?'▶▶ ×':'◀◀ ×')+sp;
+      showFrame(playT+hold.dir*sp*0.1);
+      if((hold.dir<0&&playT<=0)||(hold.dir>0&&playT>=totalDur()))end();
+    },100);
+  };
+  const end=async()=>{if(!hold)return;const h=hold;hold=null;clearInterval(h.timer);h.btn.classList.remove('hold');$('speed').textContent='';
+    if(!h.scan)showFrame(playT+h.dir*5);
+    if(h.was&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}};
+  [['rew',-1],['ffw',1]].forEach(([id,d])=>{const b=$(id);
+    b.addEventListener('pointerdown',e=>begin(e,d));
+    b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);
+    b.addEventListener('contextmenu',e=>e.preventDefault());});
+})();
+
+// barra di posizione trascinabile
+(function(){let was=false,active=false;const sc=$('scrub');
+  sc.addEventListener('pointerdown',async()=>{unlockPv();if(active)return;active=true;was=playing;await stopPlay();});
+  sc.addEventListener('input',async()=>{if(playing)await stopPlay();showFrame(+sc.value);});
+  const fine=async()=>{if(!active)return;active=false;if(was&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}was=false;};
+  sc.addEventListener('change',fine);sc.addEventListener('pointerup',fine);
+})();
+['fmt','fit'].forEach(id=>$(id).addEventListener('change',()=>{if(!busy&&items.length)showFrame(playT);}));
+
+$('expBtn').onclick=async()=>{await stopPlay();if(busy||!items.length)return;
   const mime=pickMime(),cv=$('cv');
   if(mime===null||!cv.captureStream){setStatus('Questo browser non sa registrare video. Usa Safari su iPhone o Chrome aggiornato.',true);return;}
-  stopReq=false;setBusy(true);$('result').hidden=true;
+  stopReq=false;setBusy(true,true);$('result').hidden=true;
   try{
     audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
     const {w,h}=outSize();cv.width=w;cv.height=h;
@@ -385,7 +487,7 @@ $('expBtn').onclick=async()=>{if(busy||!items.length)return;
       setStatus(isMp4?'Video pronto. Tocca «Salva il video».':'Pronto, ma questo browser registra solo in WebM, non MP4.',!isMp4);
     }
   }catch(e){setStatus('Errore durante l\'esportazione: '+e.message,true);}
-  setBusy(false);
+  const msg=$('status').textContent,err=$('status').className.includes('err');setBusy(false);setT(0);showFrame(0);setStatus(msg,err);
 };
 
 /* ---------- salvataggio ---------- */
@@ -405,9 +507,6 @@ $('saveBtn').onclick=async()=>{if(!lastBlob)return;
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
 };
 
-// schermo nero iniziale
-(function(){const x=$('cv').getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
-  x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);})();
 render();
 // copia sul dispositivo per usarla anche senza internet (solo come pagina web, non nell'app)
 if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
