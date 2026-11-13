@@ -29,7 +29,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
             f(prefs, sel, true)
         }
 
-        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1180, height: 860), configuration: config)
+        webView = ArnoWebView(frame: NSRect(x: 0, y: 0, width: 1180, height: 860), configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         if #available(macOS 13.3, *) { webView.isInspectable = true }
@@ -315,5 +315,19 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         webView.reload()
+    }
+}
+
+/// WKWebView senza «Ricarica» (Reload) nel menu del tasto destro:
+/// ricaricare la pagina interromperebbe esportazioni e riproduzione.
+final class ArnoWebView: WKWebView {
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        for item in menu.items where item.identifier?.rawValue == "WKMenuItemIdentifierReload" {
+            menu.removeItem(item)
+        }
+        // niente separatori rimasti in cima o in fondo
+        while let first = menu.items.first, first.isSeparatorItem { menu.removeItem(first) }
+        while let last = menu.items.last, last.isSeparatorItem { menu.removeItem(last) }
+        super.willOpenMenu(menu, with: event)
     }
 }

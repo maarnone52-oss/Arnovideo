@@ -273,7 +273,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.7.0';
+const VERSION='1.7.1';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -763,6 +763,8 @@ document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return
   if(e.key===' '){e.preventDefault();if(el&&el.blur)el.blur();arnoMenu('play');}
   else if(e.key==='ArrowLeft'&&tag!=='INPUT'){e.preventDefault();arnoMenu('rew');}
   else if(e.key==='ArrowRight'&&tag!=='INPUT'){e.preventDefault();arnoMenu('ffw');}});
+// niente menu del tasto destro (con «Ricarica»), tranne nei campi di testo dove serve per copiare e incollare
+document.addEventListener('contextmenu',e=>{if(!e.target.closest('input[type=text],input:not([type]),textarea'))e.preventDefault();});
 ['dragover','drop'].forEach(ev=>document.addEventListener(ev,e=>{if(!e.dataTransfer||![...e.dataTransfer.types].includes('Files'))return;
   e.preventDefault();if(ev==='drop')addFiles([...e.dataTransfer.files].filter(f=>/^(video|image)\//.test(f.type)||/\.(mp4|m4v|mov|jpe?g|png|heic|heif|gif|webp)$/i.test(f.name)));}));
 
