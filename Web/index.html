@@ -61,7 +61,23 @@ button{font:inherit;color:var(--text);cursor:pointer}
 #tl:empty::before{content:attr(data-empty);margin:auto;color:var(--dim);font-size:15px;text-align:center;padding:0 20px}
 .clip{flex:none;width:150px;cursor:pointer;border-radius:10px;background:linear-gradient(180deg,#34383f,#25282d);border:1px solid #4b5058;
  box-shadow:0 4px 10px rgba(0,0,0,.5);overflow:hidden;scroll-snap-align:start;position:relative;user-select:none;-webkit-user-select:none}
-.clip.vid{border-top:3px solid #ffb21e}.clip.img{border-top:3px solid #38c6ff}
+.clip.vid{border-top:3px solid #ffb21e}
+/* vista a elenco: finestra che scorre in verticale, nome del file accanto */
+#tl.list{flex-direction:column;overflow-x:hidden;overflow-y:auto;max-height:min(440px,58vh);min-height:120px;gap:8px;padding:8px;overscroll-behavior:contain;scroll-snap-type:none}
+#tl.list .clip{width:100%;display:flex;align-items:stretch;border-top:1px solid #4b5058;border-left:4px solid #ffb21e}
+#tl.list .clip.img{border-left-color:#38c6ff}
+#tl.list .thumb{flex:none;width:132px;height:auto;min-height:74px;aspect-ratio:16/9;background-size:contain;background-color:#000}
+#tl.list .thumb .grip{font-size:11px}
+#tl.list .cbody{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:6px 8px}
+#tl.list .cname{flex-basis:100%;font-size:14px;color:var(--text);font-weight:600;white-space:normal;word-break:break-all;
+ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#tl.list .cdur{margin:0}
+#tl.list .stepper{margin:0;gap:4px}#tl.list .stepper span{min-width:44px;font-size:13px}
+#tl.list .cbtns{margin-left:auto;gap:6px}
+.viewsw{display:flex;justify-content:center;gap:0;margin:0 0 10px}
+.viewsw .btn{border-radius:0;min-height:36px;font-size:14px}
+.viewsw .btn.on{background:linear-gradient(180deg,#ffc44d,#e89a00);color:#1b1305;border-color:#ffcf6b;border-bottom-color:#7a5000}
+.viewsw .btn:first-child{border-radius:9px 0 0 9px}.viewsw .btn:last-child{border-radius:0 9px 9px 0}.clip.img{border-top:3px solid #38c6ff}
 .clip.drag{opacity:.35}
 .clip.ghost{position:fixed;z-index:80;pointer-events:none;opacity:.9;transform:scale(1.05);box-shadow:0 14px 30px rgba(0,0,0,.8)}
 .clip.cur{outline:2px solid #46ff7a;outline-offset:-2px}
@@ -162,8 +178,9 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn sm" id="undoBtn" disabled>↶ Annulla <span id="undoN"></span></button>
       <button class="btn sm" id="redoBtn" disabled>↷ Ripeti <span id="redoN"></span></button>
     </div>
+    <div class="viewsw"><button class="btn sm" id="vList">☰ Elenco</button><button class="btn sm" id="vStrip">▭ Striscia</button></div>
     <div id="tl" data-empty="Nessun elemento. Tocca «Aggiungi video e foto»."></div>
-    <p class="note">Tocca un elemento per vederne l'inizio nell'anteprima. Trascinalo tenendolo per l'immagine per cambiarne la posizione, oppure usa ◀ ▶. Per le foto regola la durata con − e ＋.</p>
+    <p class="note">Tocca un elemento per vederne l'inizio nell'anteprima. Trascinalo tenendolo per l'immagine per cambiarne la posizione, oppure usa le frecce. Nell'elenco scorri col dito sul nome del file. Per le foto regola la durata con − e ＋.</p>
   </section>
 
 
@@ -228,7 +245,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.4.1';
+const VERSION='1.5.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -295,14 +312,18 @@ function thumbOf(src,w,h){try{const c=document.createElement('canvas');c.width=2
   x.fillStyle='#000';x.fillRect(0,0,240,135);drawFit(x,src,w,h,240,135,'contain');return c.toDataURL('image/jpeg',.7);}catch(e){return '';}}
 
 /* ---------- timeline ---------- */
+let listView=true;try{listView=localStorage.getItem('arnovideo-vista')!=='striscia';}catch(e){}
+function setView(l){listView=l;try{localStorage.setItem('arnovideo-vista',l?'elenco':'striscia');}catch(e){}
+  $('tl').classList.toggle('list',l);$('vList').classList.toggle('on',l);$('vStrip').classList.toggle('on',!l);markCur.last=-2;render();}
+$('vList').onclick=()=>setView(true);$('vStrip').onclick=()=>setView(false);
 function render(){
   const tl=$('tl');tl.innerHTML='';
   items.forEach((it,i)=>{
     const c=document.createElement('div');c.className='clip '+it.type;c.dataset.id=it.id;
-    c.innerHTML='<div class="thumb"'+(it.thumb?' style="background-image:url('+it.thumb+')"':'')+'><span class="n">'+(i+1)+'</span><span class="k">'+(it.type==='img'?'FOTO':'VIDEO')+'</span><span class="grip">⇆ trascina</span></div>'+
+    c.innerHTML='<div class="thumb"'+(it.thumb?' style="background-image:url('+it.thumb+')"':'')+'><span class="n">'+(i+1)+'</span><span class="k">'+(it.type==='img'?'FOTO':'VIDEO')+'</span><span class="grip">'+(listView?'⇅':'⇆')+' trascina</span></div>'+
       '<div class="cbody"><div class="cname"></div><div class="cdur">'+fmtT(it.dur)+'</div>'+
       (it.type==='img'?'<div class="stepper"><button class="btn xs" data-a="minus">−</button><span>'+it.dur.toFixed(1)+' s</span><button class="btn xs" data-a="plus">＋</button></div>':'')+
-      '<div class="cbtns"><button class="btn xs" data-a="left"'+(i===0?' disabled':'')+'>◀</button><button class="btn xs" data-a="del">✕</button><button class="btn xs" data-a="right"'+(i===items.length-1?' disabled':'')+'>▶</button></div></div>';
+      '<div class="cbtns"><button class="btn xs" data-a="left"'+(i===0?' disabled':'')+'>'+(listView?'▲':'◀')+'</button><button class="btn xs" data-a="del">✕</button><button class="btn xs" data-a="right"'+(i===items.length-1?' disabled':'')+'>'+(listView?'▼':'▶')+'</button></div></div>';
     c.querySelector('.cname').textContent=it.name;
     tl.appendChild(c);
   });
@@ -343,9 +364,10 @@ $('clearBtn').onclick=()=>{if(busy||!confirm('Togliere tutti gli elementi dalla 
       drag.ghost=drag.clip.cloneNode(true);drag.ghost.classList.add('ghost');drag.ghost.style.width=drag.clip.offsetWidth+'px';document.body.appendChild(drag.ghost);drag.clip.classList.add('drag');}
     drag.ghost.style.left=(e.clientX-drag.dx)+'px';drag.ghost.style.top=(e.clientY-drag.dy)+'px';
     const tl=$('tl'),tr=tl.getBoundingClientRect();         // scorrimento automatico ai bordi
-    if(e.clientX<tr.left+40)tl.scrollLeft-=12;else if(e.clientX>tr.right-40)tl.scrollLeft+=12;
+    if(listView){if(e.clientY<tr.top+40)tl.scrollTop-=12;else if(e.clientY>tr.bottom-40)tl.scrollTop+=12;}
+    else if(e.clientX<tr.left+40)tl.scrollLeft-=12;else if(e.clientX>tr.right-40)tl.scrollLeft+=12;
     const others=[...tl.children].filter(c=>c!==drag.clip);let before=null;
-    for(const c of others){const r=c.getBoundingClientRect();if(e.clientX<r.left+r.width/2){before=c;break;}}
+    for(const c of others){const r=c.getBoundingClientRect();if(listView?e.clientY<r.top+r.height/2:e.clientX<r.left+r.width/2){before=c;break;}}
     if(before)tl.insertBefore(drag.clip,before);else tl.appendChild(drag.clip);
   });
   const end=e=>{if(!drag||(e&&e.pointerId!==drag.pid))return;
@@ -453,7 +475,10 @@ function setT(t){const tot=totalDur();playT=Math.max(0,Math.min(tot,t||0));const
 function locate(t){let acc=0;for(let i=0;i<items.length;i++){const d=items[i].dur;
   if(t<acc+d||i===items.length-1)return {i,off:Math.max(0,Math.min(d,t-acc)),acc};acc+=d;}return null;}
 function startOf(i){let a=0;for(let k=0;k<i;k++)a+=items[k].dur;return a;}
-function markCur(i){[...$('tl').children].forEach((c,k)=>c.classList.toggle('cur',k===i));}
+function markCur(i){const tl=$('tl');[...tl.children].forEach((c,k)=>c.classList.toggle('cur',k===i));
+  const c=tl.children[i];if(!c||markCur.last===i)return;markCur.last=i;   // l'elemento in corso resta visibile nella finestra
+  if(listView){if(c.offsetTop<tl.scrollTop)tl.scrollTop=c.offsetTop-8;else if(c.offsetTop+c.offsetHeight>tl.scrollTop+tl.clientHeight)tl.scrollTop=c.offsetTop+c.offsetHeight-tl.clientHeight+8;}
+  else{if(c.offsetLeft<tl.scrollLeft)tl.scrollLeft=c.offsetLeft-8;else if(c.offsetLeft+c.offsetWidth>tl.scrollLeft+tl.clientWidth)tl.scrollLeft=c.offsetLeft+c.offsetWidth-tl.clientWidth+8;}}
 function blank(){const cv=$('cv');cv.width=1280;cv.height=720;const x=cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,1280,720);
   x.fillStyle='#3a3f47';x.font='bold 40px Helvetica, Arial';x.textAlign='center';x.fillText('ARNOVIDEO',640,370);markCur(-1);}
 const pv=makeVideo();pv.muted=true;           // lettore muto solo per mostrare i fotogrammi
@@ -697,7 +722,7 @@ $('projName').onclick=()=>{const n=prompt('Nome del progetto',curProj?curProj.na
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveNow();});
 window.addEventListener('pagehide',()=>saveNow());
 
-render();
+setView(listView);
 (async()=>{try{db=await dbOpen();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
   const last=localStorage.getItem('arnovideo-last');if(last&&!items.length)await openProject(last);gcFiles();}
   catch(e){$('saved').textContent='salvataggio non disponibile';}})();
