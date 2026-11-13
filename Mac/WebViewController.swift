@@ -6,10 +6,16 @@ import WebKit
 final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
     private var partID: String?
+    // file scelti col pannello del Finder: "nome|dimensione" -> percorso (ricordati anche dopo la chiusura)
+    private var knownFiles: [String: String] = UserDefaults.standard.dictionary(forKey: "ArnoVideoFiles") as? [String: String] ?? [:]
+    // file passati dalla pagina in questa sessione (es. trascinati nella finestra)
+    private var uploaded: [String: URL] = [:]
+    private var renderer: NativeRenderer?
 
     override func loadView() {
         let contentController = WKUserContentController()
         contentController.add(self, name: "save")
+        contentController.add(self, name: "render")
 
         let config = WKWebViewConfiguration()
         config.userContentController = contentController
@@ -61,7 +67,8 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
         panel.allowsMultipleSelection = true
         panel.message = "Scegli uno o più video e foto"
         panel.allowedFileTypes = ["mp4", "m4v", "mov", "jpg", "jpeg", "png", "heic", "heif", "gif", "webp"]
-        let finish: (NSApplication.ModalResponse) -> Void = { result in
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] result in
+            if result == .OK { self?.remember(panel.urls) }
             completionHandler(result == .OK ? panel.urls : nil)
         }
         if let window = view.window { panel.beginSheetModal(for: window, completionHandler: finish) }
@@ -101,10 +108,142 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
         completionHandler(alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil)
     }
 
+    // MARK: - Esportazione fatta dal Mac (AVFoundation)
+
+    private static func fileKey(_ url: URL) -> String? {
+        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else { return nil }
+        return url.lastPathComponent + "|" + String(size)
+    }
+
+    private func remember(_ urls: [URL]) {
+        for url in urls { if let key = Self.fileKey(url) { knownFiles[key] = url.path } }
+        if knownFiles.count > 2000 { knownFiles = [:] }
+        UserDefaults.standard.set(knownFiles, forKey: "ArnoVideoFiles")
+    }
+
+    private func fileURL(for key: String) -> URL? {
+        if let url = uploaded[key], FileManager.default.fileExists(atPath: url.path) { return url }
+        if let path = knownFiles[key] {
+            let url = URL(fileURLWithPath: path)
+            if Self.fileKey(url) == key { return url }      // stesso file, non spostato né modificato
+        }
+        return nil
+    }
+
+    private func js(_ code: String) {
+        DispatchQueue.main.async { self.webView.evaluateJavaScript(code, completionHandler: nil) }
+    }
+
+    private static func json(_ value: Any) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [value]),
+              let s = String(data: data, encoding: .utf8) else { return "null" }
+        return String(s.dropFirst().dropLast())
+    }
+
+    private func handleRender(_ body: [String: Any]) {
+        switch body["cmd"] as? String {
+        case "check":
+            let keys = body["keys"] as? [String] ?? []
+            let missing = keys.filter { fileURL(for: $0) == nil }
+            js("arnoNative.reply(\(Self.json(body["id"] ?? 0)),\(Self.json(missing)))")
+
+        case "upload":
+            guard let key = body["key"] as? String,
+                  let b64 = body["base64"] as? String, let data = Data(base64Encoded: b64),
+                  let index = (body["index"] as? NSNumber)?.intValue,
+                  let count = (body["count"] as? NSNumber)?.intValue else { return }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("arnovideo-files", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let name = String(key.split(separator: "|").first ?? "file")
+            let safe = String(abs(key.hashValue)) + "-" + name.replacingOccurrences(of: "/", with: "-")
+            let url = dir.appendingPathComponent(safe)
+            if index == 0 {
+                try? FileManager.default.removeItem(at: url)
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            guard let handle = try? FileHandle(forWritingTo: url) else { return }
+            handle.seekToEndOfFile(); handle.write(data); handle.closeFile()
+            if index == count - 1 { uploaded[key] = url }
+
+        case "render":
+            let list = body["items"] as? [[String: Any]] ?? []
+            var items: [RenderItem] = []
+            for entry in list {
+                guard let key = entry["key"] as? String, let url = fileURL(for: key) else {
+                    return finishRender(false, "Manca un file: «\((entry["key"] as? String ?? "").split(separator: "|").first ?? "")».")
+                }
+                items.append(RenderItem(isPhoto: (entry["type"] as? String) == "img", url: url,
+                                        duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 3))
+            }
+            let w = max(2, ((body["w"] as? NSNumber)?.intValue ?? 1920) / 2 * 2)
+            let h = max(2, ((body["h"] as? NSNumber)?.intValue ?? 1080) / 2 * 2)
+            let name = (body["name"] as? String) ?? "ArnoVideo.mp4"
+            let renderer = NativeRenderer()
+            self.renderer = renderer
+            var lastSent = -1
+            renderer.render(items: items, size: CGSize(width: w, height: h), fill: (body["fit"] as? String) == "cover",
+                            progress: { [weak self] p in
+                                let pct = Int(p * 100)
+                                if pct != lastSent { lastSent = pct; self?.js("arnoNative.progress(\(p))") }
+                            },
+                            done: { [weak self] result in
+                                DispatchQueue.main.async { self?.renderFinished(result, name: name, renderer: renderer) }
+                            })
+
+        case "cancel":
+            renderer?.cancel()
+
+        default: break
+        }
+    }
+
+    private func finishRender(_ ok: Bool, _ message: String) {
+        js("arnoNative.done(\(ok ? "true" : "false"),\(Self.json(message)))")
+    }
+
+    private func renderFinished(_ result: Result<URL, Error>, name: String, renderer: NativeRenderer) {
+        self.renderer = nil
+        switch result {
+        case .failure(let error):
+            renderer.cleanUp()
+            finishRender(false, error.localizedDescription)
+        case .success(let file):
+            js("setStatus('Video pronto: scegli dove salvarlo.')")
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = name.replacingOccurrences(of: "/", with: "-")
+            panel.allowedFileTypes = ["mp4"]
+            panel.canCreateDirectories = true
+            let save: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+                guard response == .OK, let url = panel.url else {
+                    renderer.cleanUp()
+                    self?.finishRender(false, "Video non salvato.")
+                    return
+                }
+                do {
+                    try? FileManager.default.removeItem(at: url)
+                    try FileManager.default.moveItem(at: file, to: url)
+                    renderer.cleanUp()
+                    let mb = ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) / 1_048_576
+                    self?.finishRender(true, "Video salvato: \(url.lastPathComponent) (\(mb) MB) in «\(url.deletingLastPathComponent().lastPathComponent)».")
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                } catch {
+                    renderer.cleanUp()
+                    self?.finishRender(false, "Salvataggio non riuscito: " + error.localizedDescription)
+                }
+            }
+            if let window = view.window { panel.beginSheetModal(for: window, completionHandler: save) }
+            else { save(panel.runModal()) }
+        }
+    }
+
     // MARK: - Salvataggio del video esportato (arriva a pezzi da 4 MB)
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
+        if message.name == "render", let body = message.body as? [String: Any] {
+            handleRender(body)
+            return
+        }
         guard message.name == "save",
               let body = message.body as? [String: Any],
               let name = body["name"] as? String,

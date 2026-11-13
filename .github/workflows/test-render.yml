@@ -1,0 +1,28 @@
+# Prova automatica dell'esportazione fatta dal Mac (Mac/NativeRender.swift) su un Mac di GitHub.
+name: Prova esportazione Mac
+
+on:
+  push:
+    branches: [main]
+    paths: ['Mac/NativeRender.swift', 'test/**', '.github/workflows/test-render.yml']
+  workflow_dispatch:
+
+jobs:
+  prova:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compila la prova
+        run: |
+          cp test/render-test.swift /tmp/main.swift
+          swiftc -O Mac/NativeRender.swift /tmp/main.swift -o /tmp/prova
+      - name: Esegui la prova
+        run: /tmp/prova "$PWD/test/media" "$PWD/risultati"
+      - name: Conserva i risultati
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risultati-prova
+          path: risultati
+          retention-days: 7

@@ -202,7 +202,8 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
       <button class="btn sm" id="stopBtn" hidden>■ Ferma esportazione</button>
     </div>
-    <p class="note" style="text-align:center">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
+    <p class="note" style="text-align:center" id="expNoteMac" hidden>Sul Mac il video viene creato dal Mac stesso: molto più veloce del tempo reale e a qualità piena. Alla fine scegli dove salvarlo.</p>
+    <p class="note" style="text-align:center" id="expNote">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
     <div id="result" class="row c" style="margin-top:12px" hidden>
       <button class="btn play" id="saveBtn">⤓ Salva il video</button>
       <span class="note" id="resInfo"></span>
@@ -245,7 +246,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.5.0';
+const VERSION='1.6.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const items=[];               // {id,type,file,url,name,dur,w,h,thumb,el}
@@ -466,7 +467,7 @@ function pickMime(){
   return '';
 }
 function setBusy(b,exp){busy=b;exporting=!!(b&&exp);$('stopBtn').hidden=!exporting;$('addBtn').disabled=b;render();}
-$('stopBtn').onclick=()=>{stopReq=true;};
+$('stopBtn').onclick=()=>{stopReq=true;const nr=nativeRender();if(nr)nr.postMessage({cmd:'cancel'});};
 
 /* ---------- posizione, fotogramma e comandi di trasporto ---------- */
 let playT=0,playing=false,exporting=false,runP=null;
@@ -549,7 +550,40 @@ $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(pla
 })();
 ['fmt','fit'].forEach(id=>$(id).addEventListener('change',()=>{if(!busy&&items.length)showFrame(playT);}));
 
+/* ---------- esportazione fatta dal Mac (solo nell'app per Mac) ---------- */
+function nativeRender(){try{return window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.render;}catch(e){return null;}}
+window.arnoNative={_wait:{},
+  reply(id,data){const f=this._wait[id];if(f){delete this._wait[id];f(data);}},
+  progress(p){setStatus('Il Mac sta creando il video… '+Math.round(p*100)+'%');const sc=$('scrub');sc.style.setProperty('--p',(p*100)+'%');},
+  done(ok,msg){const f=this._wait.done;if(f){delete this._wait.done;f({ok,msg});}}};
+async function exportNative(nr){
+  stopReq=false;setBusy(true,true);$('result').hidden=true;let msg='',err=false;
+  try{
+    const {w,h}=outSize(),key=it=>it.name+'|'+((it.file&&it.file.size)||it.size||0);
+    setStatus('Preparo l\'esportazione…');
+    const id=Date.now();
+    const missing=await new Promise(r=>{arnoNative._wait[id]=r;nr.postMessage({cmd:'check',id,keys:[...new Set(items.map(key))]});});
+    // i file che il Mac non conosce (per esempio trascinati nella finestra) gli vengono passati
+    const toSend=missing.map(k=>items.find(it=>key(it)===k)).filter(Boolean);
+    const total=toSend.reduce((a,it)=>a+it.file.size,0)||1;let sent=0;const CH=4*1024*1024;
+    const b64=part=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result);res(s.slice(s.indexOf(',')+1));};r.onerror=()=>rej(r.error);r.readAsDataURL(part);});
+    for(const it of toSend){const f=it.file,count=Math.max(1,Math.ceil(f.size/CH));
+      for(let i=0;i<count;i++){if(stopReq)throw new Error('annullata');
+        nr.postMessage({cmd:'upload',key:key(it),index:i,count,base64:await b64(f.slice(i*CH,(i+1)*CH))});
+        sent+=Math.min(CH,f.size-i*CH);setStatus('Passo i file al Mac… '+Math.round(sent/total*100)+'%');await sleep(0);}}
+    if(stopReq)throw new Error('annullata');
+    const d=new Date(),p2=n=>String(n).padStart(2,'0');
+    const name='ARNOVIDEO-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes())+'.mp4';
+    setStatus('Il Mac sta creando il video… 0%');
+    const res=await new Promise(r=>{arnoNative._wait.done=r;
+      nr.postMessage({cmd:'render',w,h,fit:$('fit').value,name,items:items.map(it=>({type:it.type,key:key(it),dur:it.dur}))});});
+    msg=res.msg;err=!res.ok;
+  }catch(e){msg=e.message==='annullata'?'Esportazione annullata.':'Errore durante l\'esportazione: '+e.message;err=e.message!=='annullata';}
+  setBusy(false);setT(0);showFrame(0);setStatus(msg,err);
+}
+
 $('expBtn').onclick=async()=>{await stopPlay();if(busy||!items.length)return;
+  const nr=nativeRender();if(nr)return exportNative(nr);
   const mime=pickMime(),cv=$('cv');
   if(mime===null||!cv.captureStream){setStatus('Questo browser non sa registrare video. Usa Safari su iPhone o Chrome aggiornato.',true);return;}
   stopReq=false;setBusy(true,true);$('result').hidden=true;
@@ -723,6 +757,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',()=>saveNow());
 
 setView(listView);
+if(nativeRender()){$('expNoteMac').hidden=false;$('expNote').hidden=true;}
 (async()=>{try{db=await dbOpen();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
   const last=localStorage.getItem('arnovideo-last');if(last&&!items.length)await openProject(last);gcFiles();}
   catch(e){$('saved').textContent='salvataggio non disponibile';}})();
