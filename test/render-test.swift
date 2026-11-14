@@ -10,7 +10,7 @@ try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories
 
 func run(fill: Bool, size: CGSize, name: String) -> Bool {
     let items = [
-        RenderItem(isPhoto: false, url: media.appendingPathComponent("rosso.mp4"), duration: 0),
+        RenderItem(isPhoto: false, url: media.appendingPathComponent("colori.mp4"), duration: 2, start: 2),   // tagliato: blu poi giallo
         RenderItem(isPhoto: true, url: media.appendingPathComponent("blu.jpg"), duration: 1.5),
         RenderItem(isPhoto: false, url: media.appendingPathComponent("verde-verticale.mp4"), duration: 0),
         RenderItem(isPhoto: false, url: media.appendingPathComponent("giallo-ruotato-muto.mp4"), duration: 0),
@@ -45,7 +45,7 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
         gen.requestedTimeToleranceBefore = .zero
         gen.requestedTimeToleranceAfter = .zero
         var ok = abs(asset.duration.seconds - 7.0) < 0.15 && a.count == 1
-        for (t, expect) in [(1.0, "rosso"), (2.75, "blu"), (4.5, "verde"), (6.2, "giallo")] {
+        for (t, expect) in [(0.5, "blu (taglio)"), (1.5, "giallo (taglio)"), (2.75, "blu foto"), (4.5, "verde"), (6.2, "giallo")] {
             guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) else {
                 print("[\(name)] t=\(t): nessun fotogramma"); ok = false; continue
             }

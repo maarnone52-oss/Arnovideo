@@ -6,7 +6,8 @@ import CoreGraphics
 struct RenderItem {
     let isPhoto: Bool
     let url: URL
-    let duration: Double      // usata solo per le foto
+    var duration: Double = 0  // foto: durata; video: durata del pezzo tagliato (0 = tutto il video)
+    var start: Double = 0     // video: punto d'inizio nel file (taglio in testa)
 }
 
 enum RenderError: LocalizedError {
@@ -86,7 +87,13 @@ final class NativeRenderer {
             guard let source = asset.tracks(withMediaType: .video).first else {
                 throw RenderError.message("Nel file «\(item.url.lastPathComponent)» non trovo il video.")
             }
-            let range = source.timeRange
+            var range = source.timeRange
+            if !item.isPhoto, item.start > 0 || item.duration > 0 {
+                // taglio in testa e in coda
+                let s = range.start + CMTime(seconds: max(0, item.start), preferredTimescale: 600)
+                let d = item.duration > 0 ? CMTime(seconds: item.duration, preferredTimescale: 600) : range.end - s
+                range = CMTimeRange(start: s, duration: d).intersection(source.timeRange)
+            }
             guard range.duration.seconds > 0 else { continue }
             try videoTrack.insertTimeRange(range, of: source, at: cursor)
 

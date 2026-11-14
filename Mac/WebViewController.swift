@@ -174,7 +174,8 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                     return finishRender(false, "Manca un file: «\((entry["key"] as? String ?? "").split(separator: "|").first ?? "")».")
                 }
                 items.append(RenderItem(isPhoto: (entry["type"] as? String) == "img", url: url,
-                                        duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 3))
+                                        duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 3,
+                                        start: (entry["tin"] as? NSNumber)?.doubleValue ?? 0))
             }
             let w = max(2, ((body["w"] as? NSNumber)?.intValue ?? 1920) / 2 * 2)
             let h = max(2, ((body["h"] as? NSNumber)?.intValue ?? 1080) / 2 * 2)
