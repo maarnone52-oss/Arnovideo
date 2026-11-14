@@ -157,6 +157,15 @@ select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--
 #cv{display:block;max-width:100%;max-height:60vh;background:#000}
 .bar{height:12px;border-radius:6px;background:#0a0403;box-shadow:inset 0 2px 4px #000;overflow:hidden;margin:12px 0 4px}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff4530,#ffb21e,#46ff7a)}
+/* barra di caricamento dei file */
+#loadBox{margin-top:12px}#loadBox[hidden]{display:none}
+#loadBox .bar{height:16px;margin:0 0 6px;position:relative}
+#loadBar{transition:width .25s ease}
+#loadBox .bar::after{content:"";position:absolute;inset:0;border-radius:6px;opacity:.35;
+ background:repeating-linear-gradient(-45deg,rgba(255,255,255,.35) 0 8px,transparent 8px 16px);background-size:22px 22px;animation:loadmove .6s linear infinite}
+@keyframes loadmove{from{background-position:0 0}to{background-position:22px 0}}
+#loadTxt{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%}
+#loadPct{font-size:18px}
 /* progetti */
 .projhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
 #projName{font-size:17px;font-weight:700;color:#ffb21e;background:none;border:none;border-bottom:1px dashed #6b5a2a;padding:4px 2px;max-width:100%;
@@ -221,6 +230,8 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn sm" id="allBtn" disabled>⇣ Tutti nella timeline</button>
     </div>
     <input type="file" id="file" accept="video/mp4,video/quicktime,video/*,image/*" multiple hidden>
+    <div id="loadBox" hidden><div class="bar"><i id="loadBar"></i></div>
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span class="note" id="loadTxt"></span><span class="lcd" id="loadPct">0%</span></div></div>
     <div id="lib" style="margin-top:12px" data-empty="Nessun file. Tocca «Aggiungi video e foto» (sul Mac puoi anche trascinarli qui)."></div>
     <p class="note">Trascina un elemento tenendolo per l'immagine e lascialo nella timeline, nel punto che vuoi. Oppure tocca «＋ Timeline» per metterlo in fondo. Lo stesso file si può usare più volte.</p>
   </section>
@@ -311,7 +322,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.8.1';
+const VERSION='1.8.2';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -333,19 +344,29 @@ function makeVideo(){const v=document.createElement('video');v.playsInline=true;
 /* ---------- caricamento ---------- */
 $('addBtn').onclick=()=>{if(!busy)$('file').click();};
 $('file').onchange=e=>{const files=[...e.target.files];e.target.value='';addFiles(files);};
+/* barra di avanzamento del caricamento (e poi delle miniature) */
+let loading=false;
+function loadUI(pct,txt){const b=$('loadBox');if(pct==null){b.hidden=true;return;}b.hidden=false;
+  pct=Math.max(0,Math.min(100,pct));$('loadBar').style.width=pct+'%';$('loadPct').textContent=Math.round(pct)+'%';$('loadTxt').textContent=txt;}
+const mb=n=>n<1048576?Math.max(1,Math.round(n/1024))+' KB':(n/1048576).toFixed(n<10485760?1:0)+' MB';
 async function addFiles(files){if(!files.length||busy)return;
   pushUndo('caricamento di '+files.length+' file');setStatus('Carico '+files.length+' file…');
-  for(const f of files){
+  loading=true;const tot=files.reduce((a,f)=>a+f.size,0)||1;let done=0,k=0;
+  const show=(f,phase,what)=>loadUI((done+f.size*phase)/tot*100,'Carico '+k+' di '+files.length+' · '+f.name+' ('+mb(f.size)+') · '+what);
+  for(const f of files){k++;show(f,0.05,'lettura…');
     const isImg=/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|gif|webp)$/i.test(f.name);
     const it={mid:++uid,type:isImg?'img':'vid',file:f,url:URL.createObjectURL(f),name:f.name,dur:0,w:0,h:0,thumb:'',size:f.size,
       fkey:'f'+Date.now()+'-'+Math.random().toString(36).slice(2,8)};
     try{ if(isImg)await loadImage(it); else await loadVideo(it);
+      show(f,0.35,'copia nel progetto…');
       try{await dbPut('files',{key:it.fkey,blob:f});}catch(e){it.fkey=null;setStatus('Spazio insufficiente: «'+f.name+'» non verrà conservato nel progetto.',true);await sleep(1500);}
       media.push(it); }
     catch(err){URL.revokeObjectURL(it.url);setStatus('Non riesco a leggere «'+f.name+'»: '+err.message,true);await sleep(1500);}
-    render();
+    done+=f.size;show(f,0,'fatto');render();
   }
+  loading=false;loadUI(100,'File caricati: '+files.length+' · '+mb(tot));
   setStatus('File caricati: trascinali nella timeline.');queueStrips();
+  setTimeout(()=>{if(!loading&&!stripRunning)loadUI(null);},1200);
 }
 async function loadImage(it){
   const img=new Image();img.src=it.url;await once(img,'load',20000);
@@ -404,8 +425,9 @@ function nativeThumbs(m,times){const nr=nativeRender();if(!nr)return Promise.res
   return new Promise(r=>{const to=setTimeout(()=>{delete arnoNative._wait[id];r(null);},20000);
     arnoNative._wait[id]=a=>{clearTimeout(to);r(a&&a.length===times.length&&a.every(Boolean)?a:null);};
     nr.postMessage({cmd:'thumbs',id,key:m.name+'|'+((m.file&&m.file.size)||m.size||0),times});});}
-async function runStrips(){if(stripRunning)return;stripRunning=true;
+async function runStrips(){if(stripRunning)return;stripRunning=true;let nDone=0;
   while(stripQ.length){
+    if(!loading)loadUI(nDone/(nDone+stripQ.length)*100,'Preparo le miniature dei video · '+(nDone+1)+' di '+(nDone+stripQ.length));
     while(exporting||playing)await sleep(500);          // non disturba riproduzione ed esportazione
     const it=stripQ.shift();if(!media.includes(it))continue;
     const times=[0.001,...stripTimes(it.dur).map(t=>Math.max(0.001,t))];
@@ -420,9 +442,10 @@ async function runStrips(){if(stripRunning)return;stripRunning=true;
     if(res[0])it.thumb=res[0];
     const st=res.slice(1);if(st.length===STRIP_N&&st.every(Boolean))it.strip=st;
     else if(!it.stripTries){it.stripTries=1;setTimeout(()=>{if(media.includes(it)&&!it.strip){stripQ.push(it);runStrips();}},4000);}  // un secondo tentativo
-    renderLib();renderTrack();scheduleSave();
+    renderLib();renderTrack();scheduleSave();nDone++;
   }
-  stripRunning=false;}
+  stripRunning=false;
+  if(!loading){loadUI(100,'Miniature pronte.');setTimeout(()=>{if(!loading&&!stripRunning)loadUI(null);},1000);}}
 function queueStrips(){media.forEach(it=>{if(it.type==='vid'&&(!it.thumb||!(it.strip&&it.strip.length===STRIP_N))&&!stripQ.includes(it))stripQ.push(it);});runStrips();}
 
 /* ---------- finestra di anteprima sganciabile e ridimensionabile ---------- */
