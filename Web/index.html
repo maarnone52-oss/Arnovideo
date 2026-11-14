@@ -13,7 +13,10 @@
 <style>
 :root{--bg:#0d0e10;--chassis1:#2b2e33;--chassis2:#1e2024;--edge:#3b3f46;--print:#b9bec6;--dim:#7d838c;
  --red:#ff4530;--green:#46ff7a;--amber:#ffb21e;--text:#eceef0}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+ /* niente selezione del testo, lente, menu o trascinamento delle immagini con la pressione prolungata */
+ -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
+input[type=text],textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html{touch-action:manipulation;-webkit-text-size-adjust:100%}
 html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 "Helvetica Neue",Helvetica,Arial,sans-serif}
 main{max-width:1100px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left))}
@@ -80,7 +83,7 @@ button{font:inherit;color:var(--text);cursor:pointer}
 #track{position:relative;overflow-x:auto;overflow-y:hidden;background:#0b0c0e;border-radius:10px;box-shadow:inset 0 2px 8px rgba(0,0,0,.85);
  -webkit-overflow-scrolling:touch;min-height:118px}
 #track.over{box-shadow:inset 0 0 0 2px #46ff7a,inset 0 2px 8px rgba(0,0,0,.85)}
-#trackIn{position:relative;min-width:100%;height:118px}
+#trackIn{position:relative;min-width:100%;height:160px}
 #ruler{position:absolute;left:0;right:0;top:0;height:22px;cursor:ew-resize;touch-action:none;border-bottom:1px solid #2a2d33;background:#121418}
 #ruler b{position:absolute;top:0;height:22px;border-left:1px solid #3b3f46;font:600 10px "SF Mono",Menlo,monospace;color:var(--dim);padding:5px 0 0 3px;pointer-events:none}
 #lane{position:absolute;left:0;top:28px;height:84px;display:flex;gap:0}
@@ -108,6 +111,13 @@ button{font:inherit;color:var(--text);cursor:pointer}
 .tclip .tgrip{position:absolute;left:0;top:18px;bottom:0;width:22px;touch-action:none;cursor:grab;
  background:linear-gradient(90deg,rgba(0,0,0,.55),transparent);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center}
 #phead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#ff4530;box-shadow:0 0 6px #ff4530;pointer-events:none;z-index:3}
+/* fascia sotto la timeline: si tocca o si trascina il pallino per spostare la posizione */
+#kzone{position:absolute;left:0;right:0;top:116px;bottom:0;touch-action:none;cursor:ew-resize;z-index:2;
+ background:linear-gradient(#0b0c0e,#121418);border-top:1px solid #2a2d33}
+#kzone::after{content:"trascina il pallino rosso";position:sticky;left:12px;display:inline-block;margin:14px 0 0 12px;font-size:11px;color:#4b5058;letter-spacing:.06em;pointer-events:none}
+#pknob{position:absolute;left:-15px;bottom:6px;width:32px;height:32px;border-radius:50%;pointer-events:none;
+ background:radial-gradient(circle at 35% 35%,#ff9b8a,#ff4530 55%,#b0200d);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.8),0 0 10px #ff4530}
+#phead.drag #pknob{transform:scale(1.2)}
 #phead::before{content:"";position:absolute;top:0;left:-6px;border:7px solid transparent;border-top-color:#ff4530}
 #ins{position:absolute;top:24px;bottom:2px;width:4px;margin-left:-2px;background:#46ff7a;border-radius:2px;box-shadow:0 0 10px #46ff7a;display:none;z-index:4}
 .dragghost{position:fixed;z-index:90;pointer-events:none;opacity:.92;border-radius:8px;overflow:hidden;box-shadow:0 14px 30px rgba(0,0,0,.8);border:2px solid #46ff7a;
@@ -258,9 +268,9 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <span id="zLbl"></span><button class="btn xs" id="zOut" aria-label="Riduci">−</button><button class="btn xs" id="zIn" aria-label="Ingrandisci">＋</button><button class="btn xs" id="zFit">Adatta</button>
       <button class="btn xs" id="clearBtn" disabled>Svuota</button>
     </div>
-    <div id="track"><div id="trackIn"><div id="ruler"></div><div id="lane" data-empty="Trascina qui video e foto dall'elenco"></div><div id="phead"></div><div id="ins"></div></div></div>
+    <div id="track"><div id="trackIn"><div id="ruler"></div><div id="lane" data-empty="Trascina qui video e foto dall'elenco"></div><div id="kzone"></div><div id="phead"><div id="pknob"></div></div><div id="ins"></div></div></div>
     <div id="selBar"></div>
-    <p class="note">Tocca la timeline per spostare la posizione (il segno rosso) e selezionare un elemento. Per cambiare l'ordine trascina un elemento (sul telefono tienilo per la maniglia ⠿ a sinistra). Scorri la timeline col dito o con la rotellina. Con lo zoom (anche ⌘/Ctrl + rotellina o pizzicando il trackpad) i riquadri mostrano più fotogrammi, fino a un riquadro per ogni fotogramma.</p>
+    <p class="note">Per spostare la posizione trascina il pallino rosso sotto la timeline (oppure tocca il righello o un elemento, che così viene anche selezionato). Per cambiare l'ordine trascina un elemento (sul telefono tienilo per la maniglia ⠿ a sinistra). Scorri la timeline col dito o con la rotellina. Con lo zoom (anche ⌘/Ctrl + rotellina o pizzicando il trackpad) i riquadri mostrano più fotogrammi, fino a un riquadro per ogni fotogramma.</p>
   </section>
 
   <section class="rack">
@@ -330,7 +340,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.9.0';
+const VERSION='1.9.1';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -684,6 +694,15 @@ const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){u
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}stopPlay().then(()=>showFrame(xToT(trackX(e))));});
   $('ruler').addEventListener('pointermove',e=>{if(scr&&!playing)showFrame(xToT(trackX(e)));});
   ['pointerup','pointercancel'].forEach(t=>$('ruler').addEventListener(t,()=>{scr=false;}));
+  // fascia col pallino: come il righello, e scorre la timeline vicino ai bordi
+  let kz=false,kzWas=false;
+  $('kzone').addEventListener('pointerdown',async e=>{if(!items.length||exporting)return;e.preventDefault();kz=true;unlockPv();$('phead').classList.add('drag');
+    try{e.target.setPointerCapture(e.pointerId);}catch(_){}kzWas=playing;await stopPlay();if(kz)showFrame(xToT(trackX(e)));});
+  $('kzone').addEventListener('pointermove',e=>{if(!kz||playing)return;const tr=$('track'),r=tr.getBoundingClientRect();
+    if(e.clientX<r.left+30)tr.scrollLeft-=12;else if(e.clientX>r.right-30)tr.scrollLeft+=12;showFrame(xToT(trackX(e)));});
+  const kzEnd=async()=>{if(!kz)return;kz=false;$('phead').classList.remove('drag');
+    if(kzWas&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}kzWas=false;};
+  ['pointerup','pointercancel'].forEach(t=>$('kzone').addEventListener(t,kzEnd));
 })();
 
 /* ---------- disegno ---------- */
