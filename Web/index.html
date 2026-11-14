@@ -114,6 +114,7 @@ button{font:inherit;color:var(--text);cursor:pointer}
 /* fascia sotto la timeline: si tocca o si trascina il pallino per spostare la posizione */
 #kzone{position:absolute;left:0;right:0;top:116px;bottom:0;touch-action:none;cursor:ew-resize;z-index:2;
  background:linear-gradient(#0b0c0e,#121418);border-top:1px solid #2a2d33}
+body:not(.showhelp) #kzone::after{display:none!important}
 #kzone::after{content:"trascina il pallino rosso";position:sticky;left:12px;display:inline-block;margin:14px 0 0 12px;font-size:11px;color:#4b5058;letter-spacing:.06em;pointer-events:none}
 #pknob{position:absolute;left:-15px;bottom:6px;width:32px;height:32px;border-radius:50%;pointer-events:none;
  background:radial-gradient(circle at 35% 35%,#ff9b8a,#ff4530 55%,#b0200d);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.8),0 0 10px #ff4530}
@@ -217,6 +218,30 @@ select{width:100%;min-height:46px;font-size:16px;background:#111317;color:var(--
 #hidden{position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
 footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-spacing:.08em}
 #result[hidden],#busy[hidden]{display:none}
+.help{display:none!important}
+body.showhelp .help:not([hidden]){display:block!important}
+#helpBtn{margin-top:8px;min-height:30px;font-size:13px;padding:0 12px}
+#helpBtn.on{background:linear-gradient(180deg,#5cff8e,#1fbf55);color:#06210f;border-color:#8affb0}
+/* anteprima ripetuta sopra la timeline */
+#mirrorBox{max-width:560px;margin:0 auto 12px}
+#cv2{display:block;width:100%;height:auto;background:#000;border-radius:8px;box-shadow:inset 0 0 0 1px #000,0 2px 10px rgba(0,0,0,.6)}
+.mini{gap:6px;margin-top:8px;flex-wrap:nowrap}
+.mini .btn{min-height:40px;min-width:46px;font-size:18px;padding:0 8px;touch-action:manipulation}
+.mini .btn.play{min-width:58px}
+#clock2{font-size:15px;min-width:64px;text-align:right}
+/* sotto la timeline: elemento selezionato a sinistra, zoom a destra */
+.under{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
+.under #selBar{margin:0;flex:1 1 220px}
+.zoombox{display:flex;align-items:center;gap:8px;margin-left:auto}
+#zslider{position:relative;width:170px;height:46px;touch-action:none;cursor:ew-resize}
+#zslider .zline{position:absolute;left:0;right:0;top:8px;height:4px;border-radius:2px;background:#0a0403;box-shadow:inset 0 1px 2px #000}
+#zslider .zline::before,#zslider .zline::after{position:absolute;top:-14px;font-size:11px;font-weight:800;color:var(--dim)}
+#zslider .zline::before{content:"−";left:0}#zslider .zline::after{content:"＋";right:0}
+#zthumb{position:absolute;top:0;width:4px;height:28px;margin-left:-2px;background:#ffb21e;border-radius:2px;box-shadow:0 0 8px rgba(255,178,30,.7);pointer-events:none}
+#zthumb::after{content:"";position:absolute;left:-10px;top:22px;width:24px;height:24px;border-radius:50%;
+ background:radial-gradient(circle at 35% 35%,#ffe2a0,#ffb21e 55%,#c47f00);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.8)}
+#zslider.drag #zthumb::after{transform:scale(1.15)}
+#zLbl{min-width:70px}
 </style>
 </head>
 <body>
@@ -224,6 +249,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
   <div class="brand">
     <div class="wordmark"><span class="a">ARNO</span><span class="b">VIDEO</span></div>
     <div class="ver">versione <b id="ver"></b></div>
+    <button class="btn sm" id="helpBtn">？ Aiuto</button>
     <div class="tag">Video e foto in sequenza → un unico MP4</div>
   </div>
 
@@ -238,7 +264,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn sm" id="recentBtn">☰ Progetti recenti</button>
     </div>
     <div id="recent" hidden></div>
-    <p class="note" style="text-align:center">Il progetto si salva da solo a ogni modifica, anche quando esci dall'app.</p>
+    <p class="note help" style="text-align:center">Il progetto si salva da solo a ogni modifica, anche quando esci dall'app.</p>
   </section>
 
   <section class="rack">
@@ -251,11 +277,20 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
     <div id="loadBox" hidden><div class="bar"><i id="loadBar"></i></div>
       <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span class="note" id="loadTxt"></span><span class="lcd" id="loadPct">0%</span></div></div>
     <div id="lib" style="margin-top:12px" data-empty="Nessun file. Tocca «Aggiungi video e foto» (sul Mac puoi anche trascinarli qui)."></div>
-    <p class="note">Trascina un elemento tenendolo per la maniglia ⠿ (col mouse anche dal nome) e lascialo nella timeline, nel punto che vuoi. Oppure tocca «＋ Timeline» per metterlo in fondo. Lo stesso file si può usare più volte.</p>
+    <p class="note help">Trascina un elemento tenendolo per la maniglia ⠿ (col mouse anche dal nome) e lascialo nella timeline, nel punto che vuoi. Oppure tocca «＋ Timeline» per metterlo in fondo. Lo stesso file si può usare più volte.</p>
   </section>
 
   <section class="rack">
     <span class="lbl">2 · Timeline</span>
+    <div id="mirrorBox"><canvas id="cv2" width="640" height="360"></canvas>
+      <div class="row c mini">
+        <button class="btn" data-m="prevItem" aria-label="Elemento precedente">⏮&#xFE0E;</button>
+        <button class="btn" data-m="rew" aria-label="Indietro 5 secondi">⏪&#xFE0E;</button>
+        <button class="btn play" data-m="play" id="play2" aria-label="Riproduci">▶</button>
+        <button class="btn" data-m="ffw" aria-label="Avanti 5 secondi">⏩&#xFE0E;</button>
+        <button class="btn" data-m="nextItem" aria-label="Elemento successivo">⏭&#xFE0E;</button>
+        <span class="lcd" id="clock2">0:00.0</span>
+      </div></div>
     <div class="displays">
       <div class="dwin"><div class="lcd" id="totDur">0:00.0</div><span class="lbl">durata totale</span></div>
       <div class="dwin"><div class="lcd g" id="totN">0</div><span class="lbl">elementi</span></div>
@@ -264,13 +299,14 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
       <button class="btn xs" id="undoBtn" disabled>↶ <span id="undoN"></span></button>
       <button class="btn xs" id="redoBtn" disabled>↷ <span id="redoN"></span></button>
       <span class="sp"></span>
-      <span class="lbl">zoom</span>
-      <span id="zLbl"></span><button class="btn xs" id="zOut" aria-label="Riduci">−</button><button class="btn xs" id="zIn" aria-label="Ingrandisci">＋</button><button class="btn xs" id="zFit">Adatta</button>
       <button class="btn xs" id="clearBtn" disabled>Svuota</button>
     </div>
     <div id="track"><div id="trackIn"><div id="ruler"></div><div id="lane" data-empty="Trascina qui video e foto dall'elenco"></div><div id="kzone"></div><div id="phead"><div id="pknob"></div></div><div id="ins"></div></div></div>
-    <div id="selBar"></div>
-    <p class="note">Per spostare la posizione trascina il pallino rosso sotto la timeline (oppure tocca il righello o un elemento, che così viene anche selezionato). Per cambiare l'ordine trascina un elemento (sul telefono tienilo per la maniglia ⠿ a sinistra). Scorri la timeline col dito o con la rotellina. Con lo zoom (anche ⌘/Ctrl + rotellina o pizzicando il trackpad) i riquadri mostrano più fotogrammi, fino a un riquadro per ogni fotogramma.</p>
+    <div class="under"><div id="selBar"></div>
+      <div class="zoombox"><button class="btn xs" id="zFit">Adatta</button>
+        <div id="zslider" aria-label="Zoom della timeline"><div class="zline"></div><div id="zthumb"></div></div>
+        <span class="lcd" id="zLbl" style="font-size:13px"></span></div></div>
+    <p class="note help">Lo zoom si regola trascinando la barra arancione col pallino (a sinistra meno, a destra più); al massimo ogni riquadro è un fotogramma. Per spostare la posizione trascina il pallino rosso sotto la timeline (oppure tocca il righello o un elemento, che così viene anche selezionato). Per cambiare l'ordine trascina un elemento (sul telefono tienilo per la maniglia ⠿ a sinistra). Scorri la timeline col dito o con la rotellina. Con lo zoom (anche ⌘/Ctrl + rotellina o pizzicando il trackpad) i riquadri mostrano più fotogrammi, fino a un riquadro per ogni fotogramma.</p>
   </section>
 
   <section class="rack">
@@ -291,13 +327,13 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
     </div>
     <div class="pvgrip" id="pvGrip" aria-label="Ridimensiona"></div>
     </div>
-    <p class="note" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
+    <p class="note help" style="text-align:center">⏪︎ ⏩︎ un tocco: salta di 5 secondi · tenendo premuto: scorre veloce mostrando le immagini (più a lungo tieni, più accelera). ⏮︎ ⏭︎ inizio dell'elemento precedente o successivo. Puoi anche trascinare la barra.</p>
     <div class="row c" style="margin-top:12px">
       <button class="btn rec" id="expBtn" disabled>● Esporta MP4</button>
       <button class="btn sm" id="stopBtn" hidden>■ Ferma esportazione</button>
     </div>
-    <p class="note" style="text-align:center" id="expNoteMac" hidden>Sul Mac il video viene creato dal Mac stesso: molto più veloce del tempo reale e a qualità piena. Alla fine scegli dove salvarlo.</p>
-    <p class="note" style="text-align:center" id="expNote">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
+    <p class="note help" style="text-align:center" id="expNoteMac" hidden>Sul Mac il video viene creato dal Mac stesso: molto più veloce del tempo reale e a qualità piena. Alla fine scegli dove salvarlo.</p>
+    <p class="note help" style="text-align:center" id="expNote">L'esportazione dura quanto il video finale: tieni lo schermo acceso e l'app aperta fino alla fine.</p>
     <div id="result" class="row c" style="margin-top:12px" hidden>
       <button class="btn play" id="saveBtn">⤓ Salva il video</button>
       <span class="note" id="resInfo"></span>
@@ -340,7 +376,7 @@ footer{text-align:center;color:var(--dim);font-size:13px;margin-top:20px;letter-
 
 <script>
 'use strict';
-const VERSION='1.9.1';
+const VERSION='1.10.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -520,6 +556,26 @@ $('lib').addEventListener('click',e=>{const row=e.target.closest('.clip');if(!ro
 });
 $('allBtn').onclick=()=>{if(busy||!media.length)return;pushUndo('tutti nella timeline');media.forEach(m=>items.push(mkClip(m)));render();};
 
+/* ---------- aiuto ---------- */
+let showHelp=false;try{showHelp=localStorage.getItem('arnovideo-aiuto')==='1';}catch(e){}
+function setHelp(v){showHelp=v;document.body.classList.toggle('showhelp',v);$('helpBtn').classList.toggle('on',v);$('helpBtn').textContent=v?'✓ Aiuto visibile':'？ Aiuto';
+  try{localStorage.setItem('arnovideo-aiuto',v?'1':'0');}catch(e){}}
+$('helpBtn').onclick=()=>setHelp(!showHelp);setHelp(showHelp);
+
+/* ---------- anteprima ripetuta sopra la timeline (copia dell'anteprima principale) ---------- */
+(function(){const c2=$('cv2'),x2=c2.getContext('2d');let last=0;
+  function loop(t){requestAnimationFrame(loop);if(document.hidden||t-last<33)return;last=t;
+    const cv=$('cv');const w=Math.min(960,cv.width),h=Math.round(w*cv.height/cv.width);
+    if(c2.width!==w||c2.height!==h){c2.width=w;c2.height=h;}
+    try{x2.drawImage(cv,0,0,w,h);}catch(e){}
+    $('clock2').textContent=$('clock').textContent.split(' / ')[0];
+    $('play2').textContent=$('playBtn').textContent;$('play2').classList.toggle('red',playing);$('play2').classList.toggle('play',!playing);
+    const dis=$('playBtn').disabled;document.querySelectorAll('#mirrorBox [data-m]').forEach(b=>b.disabled=dis);}
+  requestAnimationFrame(loop);
+  $('mirrorBox').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(!b||b.disabled)return;unlockPv();const m=b.dataset.m;
+    if(m==='play')$('playBtn').click();else if(m==='prevItem'||m==='nextItem')$(m).click();
+    else if(items.length&&!exporting)jumpTo(playT+(m==='rew'?-5:5));});})();
+
 /* ---------- timeline ---------- */
 let pps=40,autoFit=true,selId=null,layout=[];   // pixel per secondo; posizioni degli elementi
 const FPS=30,TILE_W=Math.round(84*16/9),PPS_MIN=2,PPS_MAX=TILE_W*FPS;   // al massimo: un riquadro = un fotogramma
@@ -530,7 +586,8 @@ function fitZoom(){const W=$('track').clientWidth-24,tot=totalDur();if(!tot||W<5
   pps=Math.max(PPS_MIN,Math.min(PPS_MAX,(W-items.length*4)/tot));}
 function zoomLabel(){const sec=TILE_W/pps,f=Math.round(sec*FPS);
   $('zLbl').textContent=f<=1?'1 fotogramma':sec<1?f+' fotogrammi':sec<60?sec.toFixed(sec<10?1:0)+' s':(sec/60).toFixed(1)+' min';
-  $('zLbl').title='Durata di ogni riquadro della timeline';$('zIn').disabled=pps>=PPS_MAX-0.01;$('zOut').disabled=pps<=PPS_MIN+0.01;}
+  $('zLbl').title='Durata di ogni riquadro della timeline';
+  const v=Math.log(pps/PPS_MIN)/Math.log(PPS_MAX/PPS_MIN);$('zthumb').style.left=(Math.max(0,Math.min(1,v))*$('zslider').clientWidth)+'px';}
 function renderTrack(){
   if(autoFit)fitZoom();
   const lane=$('lane');lane.innerHTML='';const total=computeLayout();
@@ -602,11 +659,13 @@ async function runFrames(){if(frameBusy)return;frameBusy=true;
     for(const q of batch){if(!frameWanted.has(q.key))continue;const u=await grabAt(v,q.fi/FPS+0.001,192,108);if(u)cachePut(q.key,u);}
   }}finally{frameBusy=false;}}
 
+function revealHead(){if(!items.length||layout.length!==items.length)return;const tr=$('track'),x=tToX(playT);   // porta in vista il segno rosso
+  if(x<tr.scrollLeft+20||x>tr.scrollLeft+tr.clientWidth-40)tr.scrollLeft=Math.max(0,x-tr.clientWidth*0.4);}
 function placeHead(){const ph=$('phead');if(!items.length){ph.style.display='none';return;}ph.style.display='';
   const x=tToX(playT);ph.style.left=x+'px';
   if(playing||exporting){const tr=$('track');if(x<tr.scrollLeft+20||x>tr.scrollLeft+tr.clientWidth-40)tr.scrollLeft=x-tr.clientWidth*0.3;}}
 function renderSel(){const bar=$('selBar'),i=items.findIndex(c=>c.id===selId);
-  if(i<0){bar.innerHTML='<span class="note" style="margin:0">Nessun elemento selezionato.</span>';return;}
+  if(i<0){bar.innerHTML='';return;}
   const c=items[i];
   bar.innerHTML='<span class="nm"></span>'+
     '<button class="btn xs" data-s="left"'+(i===0?' disabled':'')+' aria-label="Sposta a sinistra">◀</button>'+
@@ -629,8 +688,12 @@ $('selBar').addEventListener('click',e=>{const b=e.target.closest('button[data-s
 function zoomTo(np,anchorX){const tr=$('track');np=Math.max(PPS_MIN,Math.min(PPS_MAX,np));if(Math.abs(np-pps)<1e-6)return;
   const ax=anchorX!=null?anchorX:(items.length?tToX(playT)-tr.scrollLeft:tr.clientWidth/2);   // punto che resta fermo
   const at=xToT(tr.scrollLeft+ax);autoFit=false;pps=np;renderTrack();tr.scrollLeft=Math.max(0,tToX(at)-ax);paintTrack();}
-$('zIn').onclick=()=>zoomTo(pps*1.6);
-$('zOut').onclick=()=>zoomTo(pps/1.6);
+// cursore dello zoom: barra arancione col pallino, scala logaritmica
+(function(){const z=$('zslider');let on=false;
+  const set=e=>{const r=z.getBoundingClientRect(),v=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));zoomTo(PPS_MIN*Math.pow(PPS_MAX/PPS_MIN,v));zoomLabel();};
+  z.addEventListener('pointerdown',e=>{e.preventDefault();on=true;z.classList.add('drag');try{z.setPointerCapture(e.pointerId);}catch(_){}set(e);});
+  z.addEventListener('pointermove',e=>{if(on)set(e);});
+  ['pointerup','pointercancel'].forEach(t=>z.addEventListener(t,()=>{on=false;z.classList.remove('drag');}));})();
 $('track').addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();   // pizzico sul trackpad o ⌘/Ctrl + rotellina
   const r=$('track').getBoundingClientRect();zoomTo(pps*Math.exp(-e.deltaY*0.01),e.clientX-r.left);},{passive:false});
 $('zFit').onclick=()=>{autoFit=true;renderTrack();$('track').scrollLeft=0;};
@@ -835,7 +898,7 @@ async function startPlay(){
 async function stopPlay(){if(!playing)return;stopReq=true;await runP;while(playing)await sleep(10);}
 $('playBtn').onclick=()=>{unlockPv();if(playing)stopPlay();else startPlay();};
 
-async function jumpTo(t){const was=playing;await stopPlay();showFrame(t);if(was){while(seekBusy)await sleep(10);startPlay();}}
+async function jumpTo(t){const was=playing;await stopPlay();showFrame(t);revealHead();if(was){while(seekBusy)await sleep(10);startPlay();}}
 $('prevItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
   const s=startOf(L.i);jumpTo(playT-s>1||L.i===0?s:startOf(L.i-1));};
 $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
