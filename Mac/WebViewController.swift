@@ -199,7 +199,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 js("arnoNative.reply(\(Self.json(id)),null)"); return
             }
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                let list = Self.makeThumbs(url: url, times: times)
+                let list = Self.makeThumbs(url: url, times: times, exact: (body["exact"] as? Bool) ?? false)
                 self?.js("arnoNative.reply(\(Self.json(id)),\(Self.json(list)))")
             }
 
@@ -210,13 +210,15 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
         }
     }
 
-    private static func makeThumbs(url: URL, times: [Double]) -> [String] {
+    private static func makeThumbs(url: URL, times: [Double], exact: Bool) -> [String] {
         let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true          // video girati: miniatura dritta
         gen.maximumSize = CGSize(width: 320, height: 180)
-        gen.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 10)
-        gen.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 10)
+        // per la timeline ingrandita serve il fotogramma esatto
+        let tol = exact ? CMTime.zero : CMTime(value: 1, timescale: 10)
+        gen.requestedTimeToleranceBefore = tol
+        gen.requestedTimeToleranceAfter = tol
         return times.map { t in
             guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) else { return "" }
             // dentro un riquadro 16:9 nero, intero (come nella pagina)
