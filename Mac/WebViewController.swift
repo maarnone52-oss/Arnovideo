@@ -175,7 +175,8 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 }
                 items.append(RenderItem(isPhoto: (entry["type"] as? String) == "img", url: url,
                                         duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 3,
-                                        start: (entry["tin"] as? NSNumber)?.doubleValue ?? 0))
+                                        start: (entry["tin"] as? NSNumber)?.doubleValue ?? 0,
+                                        volume: (entry["vol"] as? NSNumber)?.doubleValue ?? 1))
             }
             let w = max(2, ((body["w"] as? NSNumber)?.intValue ?? 1920) / 2 * 2)
             let h = max(2, ((body["h"] as? NSNumber)?.intValue ?? 1080) / 2 * 2)
