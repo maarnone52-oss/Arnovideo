@@ -72,7 +72,7 @@ final class NativeRenderer {
         var instructions: [AVMutableVideoCompositionInstruction] = []
         var cursor = CMTime.zero
         var anyAudio = false
-        var volumes: [(CMTime, Float)] = []   // volume di ogni clip, dal suo inizio
+        var volumes: [(CMTimeRange, Float)] = []   // volume di ogni clip, per tutto il suo tratto
 
         for (index, item) in items.enumerated() {
             if cancelled { throw RenderError.cancelled }
@@ -110,7 +110,7 @@ final class NativeRenderer {
                 }
             }
 
-            volumes.append((cursor, Float(max(0, min(1, item.volume)))))
+            volumes.append((CMTimeRange(start: cursor, duration: range.duration), Float(max(0, min(1, item.volume)))))
             let instruction = AVMutableVideoCompositionInstruction()
             instruction.timeRange = CMTimeRange(start: cursor, duration: range.duration)
             let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
@@ -139,7 +139,7 @@ final class NativeRenderer {
         export.shouldOptimizeForNetworkUse = true
         if anyAudio, volumes.contains(where: { $0.1 < 0.999 }) {
             let params = AVMutableAudioMixInputParameters(track: audioTrack)
-            for (time, vol) in volumes { params.setVolume(vol, at: time) }
+            for (r, vol) in volumes { params.setVolumeRamp(fromStartVolume: vol, toEndVolume: vol, timeRange: r) }
             let mix = AVMutableAudioMix()
             mix.inputParameters = [params]
             export.audioMix = mix
