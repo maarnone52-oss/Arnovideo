@@ -67,7 +67,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
         panel.message = "Scegli uno o più video e foto"
-        panel.allowedFileTypes = ["mp4", "m4v", "mov", "jpg", "jpeg", "png", "heic", "heif", "gif", "webp"]
+        panel.allowedFileTypes = ["mp4", "m4v", "mov", "jpg", "jpeg", "png", "heic", "heif", "gif", "webp", "mp3", "m4a", "aac", "wav", "aif", "aiff", "caf"]
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] result in
             if result == .OK { self?.remember(panel.urls) }
             completionHandler(result == .OK ? panel.urls : nil)
@@ -180,11 +180,19 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
             }
             let w = max(2, ((body["w"] as? NSNumber)?.intValue ?? 1920) / 2 * 2)
             let h = max(2, ((body["h"] as? NSNumber)?.intValue ?? 1080) / 2 * 2)
+            var music: [MusicItem] = []
+            for entry in body["music"] as? [[String: Any]] ?? [] {
+                guard let key = entry["key"] as? String, let url = fileURL(for: key) else { continue }
+                music.append(MusicItem(url: url, start: (entry["start"] as? NSNumber)?.doubleValue ?? 0,
+                                       offset: (entry["tin"] as? NSNumber)?.doubleValue ?? 0,
+                                       duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 0,
+                                       volume: (entry["vol"] as? NSNumber)?.doubleValue ?? 1))
+            }
             let name = (body["name"] as? String) ?? "ArnoVideo.mp4"
             let renderer = NativeRenderer()
             self.renderer = renderer
             var lastSent = -1
-            renderer.render(items: items, size: CGSize(width: w, height: h), fill: (body["fit"] as? String) == "cover",
+            renderer.render(items: items, music: music, size: CGSize(width: w, height: h), fill: (body["fit"] as? String) == "cover",
                             progress: { [weak self] p in
                                 let pct = Int(p * 100)
                                 if pct != lastSent { lastSent = pct; self?.js("arnoNative.progress(\(p))") }

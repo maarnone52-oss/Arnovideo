@@ -11,6 +11,15 @@ struct RenderItem {
     var volume: Double = 1    // volume della clip, da 0 a 1
 }
 
+/// Un pezzo della traccia musicale.
+struct MusicItem {
+    let url: URL
+    var start: Double = 0     // secondo della timeline in cui parte
+    var offset: Double = 0    // punto d'inizio nel file
+    var duration: Double = 0  // durata (già limitata alla fine del video)
+    var volume: Double = 1
+}
+
 enum RenderError: LocalizedError {
     case message(String)
     case cancelled
@@ -38,12 +47,12 @@ final class NativeRenderer {
     }
 
     /// progress: da 0 a 1. done arriva su un thread in background.
-    func render(items: [RenderItem], size: CGSize, fill: Bool,
+    func render(items: [RenderItem], music: [MusicItem] = [], size: CGSize, fill: Bool,
                 progress: @escaping (Double) -> Void,
                 done: @escaping (Result<URL, Error>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let url = try self.build(items: items, size: size, fill: fill, progress: progress)
+                let url = try self.build(items: items, music: music, size: size, fill: fill, progress: progress)
                 done(.success(url))
             } catch {
                 done(.failure(self.cancelled ? RenderError.cancelled : error))
@@ -57,7 +66,7 @@ final class NativeRenderer {
 
     // MARK: - Composizione
 
-    private func build(items: [RenderItem], size: CGSize, fill: Bool,
+    private func build(items: [RenderItem], music: [MusicItem], size: CGSize, fill: Bool,
                        progress: @escaping (Double) -> Void) throws -> URL {
         guard !items.isEmpty else { throw RenderError.message("La timeline è vuota.") }
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
@@ -123,6 +132,28 @@ final class NativeRenderer {
         guard !instructions.isEmpty else { throw RenderError.message("Nessun elemento utilizzabile nella timeline.") }
         if anyAudio { alignAudio(audioTrack, to: cursor) } else { composition.removeTrack(audioTrack) }
 
+        // traccia musicale: una seconda traccia audio, ogni pezzo dal suo punto di partenza
+        var musicVolumes: [(CMTimeRange, Float)] = []
+        var musicTrack: AVMutableCompositionTrack?
+        for m in music {
+            let total = cursor.seconds
+            guard m.start < total - 0.01 else { continue }
+            let asset = AVURLAsset(url: m.url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            guard let src = asset.tracks(withMediaType: .audio).first else { continue }
+            if musicTrack == nil {
+                musicTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            }
+            guard let mt = musicTrack else { break }
+            let s = src.timeRange.start + CMTime(seconds: max(0, m.offset), preferredTimescale: 600)
+            var d = CMTime(seconds: min(m.duration > 0 ? m.duration : src.timeRange.duration.seconds, total - m.start), preferredTimescale: 600)
+            if s + d > src.timeRange.end { d = src.timeRange.end - s }
+            guard d.seconds > 0.01 else { continue }
+            let at = CMTime(seconds: m.start, preferredTimescale: 600)
+            alignAudio(mt, to: at)
+            try mt.insertTimeRange(CMTimeRange(start: s, duration: d), of: src, at: at)
+            musicVolumes.append((CMTimeRange(start: at, duration: d), Float(max(0, min(1, m.volume)))))
+        }
+
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = size
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
@@ -137,11 +168,20 @@ final class NativeRenderer {
         export.outputFileType = .mp4
         export.videoComposition = videoComposition
         export.shouldOptimizeForNetworkUse = true
+        var mixParams: [AVMutableAudioMixInputParameters] = []
         if anyAudio, volumes.contains(where: { $0.1 < 0.999 }) {
             let params = AVMutableAudioMixInputParameters(track: audioTrack)
             for (r, vol) in volumes { params.setVolumeRamp(fromStartVolume: vol, toEndVolume: vol, timeRange: r) }
+            mixParams.append(params)
+        }
+        if let mt = musicTrack, musicVolumes.contains(where: { $0.1 < 0.999 }) {
+            let params = AVMutableAudioMixInputParameters(track: mt)
+            for (r, vol) in musicVolumes { params.setVolumeRamp(fromStartVolume: vol, toEndVolume: vol, timeRange: r) }
+            mixParams.append(params)
+        }
+        if !mixParams.isEmpty {
             let mix = AVMutableAudioMix()
-            mix.inputParameters = [params]
+            mix.inputParameters = mixParams
             export.audioMix = mix
         }
         session = export

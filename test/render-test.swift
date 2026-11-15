@@ -20,7 +20,7 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
     var result: Result<URL, Error>!
     var steps = 0
     let t0 = Date()
-    renderer.render(items: items, size: size, fill: fill, progress: { _ in steps += 1 }, done: { result = $0; sem.signal() })
+    renderer.render(items: items, music: [MusicItem(url: media.appendingPathComponent("musica.m4a"), start: 2.0, offset: 0, duration: 1.5, volume: 1)], size: size, fill: fill, progress: { _ in steps += 1 }, done: { result = $0; sem.signal() })
     sem.wait()
     switch result! {
     case .failure(let e):
@@ -65,6 +65,9 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
         let db = 20 * log10(max(l1, 1e-9) / max(l3, 1e-9))
         print(String(format: "[%@] audio clip 1: %.4f · clip 3: %.4f · differenza %.1f dB (attesa circa -12)", name, l1, l3, db))
         if abs(db + 12) > 2.5 { ok = false }
+        let lm = level(dest, from: 2.2, to: 3.3)          // durante la foto c'è solo la musica
+        print(String(format: "[%@] musica sopra la foto: %.4f (attesa sopra 0.02)", name, lm))
+        if lm < 0.02 { ok = false }
         return ok
     }
 }
