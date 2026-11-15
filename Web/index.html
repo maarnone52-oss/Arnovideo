@@ -103,6 +103,10 @@ button{font:inherit;color:var(--text);cursor:pointer}
 #lib .lgrip{flex:none;width:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#16181c;
  color:#ffb21e;font-size:20px;touch-action:none;cursor:grab;border-right:1px solid #2a2d33}
 #lib .clip.img .lgrip{color:#38c6ff}
+.lthumb{flex:none;align-self:center;width:72px;height:41px;margin-left:6px;border-radius:5px;background:#000 center/contain no-repeat;
+ box-shadow:inset 0 0 0 1px #2a2d33;touch-action:none;cursor:grab}
+.lthumb.wait{background:linear-gradient(90deg,#16181c,#22252b,#16181c);background-size:200% 100%;animation:lthw 1.2s linear infinite}
+@keyframes lthw{from{background-position:100% 0}to{background-position:-100% 0}}
 #lib .lgrip small{font-size:8px;letter-spacing:.08em;color:var(--dim);font-weight:700}
 .tclip .tname{position:absolute;left:0;right:0;top:0;padding:2px 6px;font-size:11px;font-weight:700;color:#fff;background:linear-gradient(rgba(0,0,0,.75),transparent);
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
@@ -127,6 +131,11 @@ button{font:inherit;color:var(--text);cursor:pointer}
 .volrow .vi{font-size:18px;cursor:pointer;min-width:24px;text-align:center}
 .volrow .vv{font:700 12px "SF Mono",Menlo,monospace;color:#ffb21e;min-width:38px}
 .tclip .tvol{position:absolute;left:44px;bottom:3px;font:700 10px "SF Mono",Menlo,monospace;color:#fff;background:rgba(0,0,0,.65);border-radius:4px;padding:0 4px;pointer-events:none}
+#contBtn.on{background:linear-gradient(180deg,#5cff8e,#1fbf55);color:#06210f;border-color:#8affb0;border-bottom-color:#0b5a25}
+.ramrow{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+#ramLcd{font-size:14px}
+#cacheRes{margin-top:8px;background:#0a0403;border:1px solid #46ff7a;border-radius:8px;padding:8px 10px;font:600 13px/1.5 "SF Mono",Menlo,monospace;color:#cfe9d6}
+#cacheRes b{color:#46ff7a}#cacheRes[hidden]{display:none}
 #trimTip{position:fixed;z-index:95;pointer-events:none;transform:translate(-50%,-130%);background:#0a0403;border:1px solid #ffb21e;border-radius:8px;
  padding:4px 8px;font:800 14px "SF Mono",Menlo,monospace;color:#ffb21e;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.7)}
 #trimTip[hidden]{display:none}
@@ -419,6 +428,7 @@ body.showhelp .help:not([hidden]){display:block!important}
     <div class="tlbar">
       <button class="btn xs" id="undoBtn" disabled>↶ <span id="undoN"></span></button>
       <button class="btn xs" id="redoBtn" disabled>↷ <span id="redoN"></span></button>
+      <button class="btn xs" id="contBtn" title="Play continuo: dopo ogni spostamento della posizione la riproduzione riparte da sola" style="padding:0 10px">▶ Continuo</button>
       <span class="sp"></span>
       <button class="btn xs" id="clearBtn" disabled>Svuota</button>
     </div>
@@ -491,7 +501,9 @@ body.showhelp .help:not([hidden]){display:block!important}
           <option value="16">Massima</option>
         </select></label>
       <label><span class="lbl">Spazio usato</span>
-        <div class="row" style="margin-top:6px;flex-wrap:nowrap"><span class="lcd" id="spaceLcd" style="font-size:16px;flex:1">–</span><button class="btn sm" id="cacheBtn" type="button">Svuota cache</button></div></label>
+        <div class="row" style="margin-top:6px;flex-wrap:nowrap"><span class="lcd" id="spaceLcd" style="font-size:16px;flex:1">–</span><button class="btn sm" id="cacheBtn" type="button">Svuota cache</button></div>
+        <div class="ramrow"><span class="lbl">cache in RAM</span><span class="lcd g" id="ramLcd">–</span></div>
+        <div id="cacheRes" hidden></div></label>
       <label><span class="lbl">Formato del fotogramma</span>
         <select id="frameFmt">
           <option value="jpg" selected>JPEG (foto, file più piccolo)</option>
@@ -507,7 +519,7 @@ body.showhelp .help:not([hidden]){display:block!important}
 
 <script>
 'use strict';
-const VERSION='1.14.1';
+const VERSION='1.15.4';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -599,8 +611,20 @@ function stripHTML(it){const ts=stripTimes(it.dur),ok=it.strip&&it.strip.length=
   return '<div class="strip'+(ok?'':' wait')+'">'+ts.map((t,k)=>'<i data-t="'+t.toFixed(2)+'"'+(ok?' style="background-image:url('+it.strip[k]+')"':'')+'><span>'+(it.dur<20?fmtT(t):fmtT(t).replace(/\.\d$/,''))+'</span></i>').join('')+'</div>';}
 const stripQ=[];let stripRunning=false;
 // prende un fotogramma: su iPhone e Mac (Safari) il video va fatto partire un attimo prima, altrimenti il fotogramma resta vuoto
+// lettori fissi per miniature e fotogrammi: su iPhone (soprattutto in risparmio energetico) un video può partire, anche muto,
+// solo se è stato «sbloccato» da un tocco; questi vengono sbloccati al primo tocco sulla pagina e poi riusati sempre
+const thumbPool=[];let poolBlessed=false;
+function poolVideo(i){while(thumbPool.length<=i){const v=makeVideo();v.muted=true;v.preload='metadata';thumbPool.push(v);}return thumbPool[i];}
+function poolFree(v){try{v.pause();v.removeAttribute('src');v.dataset.url='';v.__primed=false;v.load();}catch(e){}}   // libera la memoria del file
+function poolLoad(v,url){if(v.dataset.url!==url){v.__primed=false;v.src=url;v.dataset.url=url;}return v;}
+for(let i=0;i<2;i++)poolVideo(i);   // solo due lettori: su iPhone troppi video aperti insieme bloccano la pagina
+function blessPool(){if(poolBlessed)return;poolBlessed=true;
+  thumbPool.forEach(v=>{try{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});v.pause();}catch(e){}});
+  // ciò che non era riuscito prima del tocco si rifà adesso
+  media.forEach(m=>{if(m.type==='vid'&&!m.thumb)m.stripTries=0;});queueStrips();setTimeout(()=>paintTrack(true),300);}
+['pointerdown','touchend','keydown'].forEach(t=>document.addEventListener(t,blessPool,{capture:true,passive:true}));
 async function primeVideo(v){if(v.__primed)return;v.__primed=true;
-  try{v.muted=true;const p=v.play();if(p&&p.then)await Promise.race([p.catch(()=>{}),sleep(1500)]);
+  try{v.muted=true;const p=v.play();if(p&&p.then)await Promise.race([p.catch(e=>{if(e&&e.name==='NotAllowedError')v.__primed=false;}),sleep(1500)]);
     await Promise.race([new Promise(r=>v.addEventListener('timeupdate',r,{once:true})),sleep(800)]);}catch(e){}
   try{v.pause();}catch(e){}}
 async function grabAt(v,t,W,H){
@@ -625,17 +649,17 @@ async function runStrips(){if(stripRunning)return;stripRunning=true;let nDone=0;
     const it=stripQ.shift();if(!media.includes(it))continue;
     const times=[0.001];
     let res=await nativeThumbs(it,times);
-    if(!res){const v=makeVideo();v.muted=true;v.src=it.url;res=[];
+    if(!res){const v=poolLoad(poolVideo(0),it.url);res=[];
       try{await once(v,'loadedmetadata',20000);if(v.readyState<2){try{await once(v,'loadeddata',5000);}catch(e){}}
         await primeVideo(v);
         res.push(await grabAt(v,0.001,240,135));
       }catch(e){}
-      v.removeAttribute('src');v.load();v.remove();}
+      }
     if(res[0])it.thumb=res[0];
     if(!res[0]&&!it.stripTries){it.stripTries=1;setTimeout(()=>{if(media.includes(it)&&!it.thumb){stripQ.push(it);runStrips();}},4000);}  // un secondo tentativo
     renderLib();renderTrack();scheduleSave();nDone++;
   }
-  stripRunning=false;
+  stripRunning=false;poolFree(poolVideo(0));
   if(!loading){loadUI(100,'Miniature pronte.');setTimeout(()=>{if(!loading&&!stripRunning)loadUI(null);},1000);}}
 function queueStrips(){media.forEach(it=>{if(it.type==='vid'&&!it.thumb&&!stripQ.includes(it))stripQ.push(it);});runStrips();}
 
@@ -678,6 +702,7 @@ function renderLib(){
   media.forEach(m=>{
     const c=document.createElement('div');c.className='clip '+m.type;c.dataset.mid=m.mid;const u=usedCount(m);
     c.innerHTML='<div class="lgrip" title="Trascina nella timeline">⠿<small>'+(m.type==='img'?'FOTO':'VIDEO')+'</small></div>'+
+      '<div class="lthumb'+(m.thumb?'':' wait')+'"'+(m.thumb?' style="background-image:url('+m.thumb+')"':'')+'></div>'+
       '<div class="cbody"><div class="cname"></div><div class="cdur">'+fmtT(m.dur)+'</div>'+(u?'<span class="used">nella timeline'+(u>1?' ×'+u:'')+'</span>':'')+
       '<div class="cbtns"><button class="btn xs" data-a="add" style="padding:0 10px">＋ Timeline</button><button class="btn xs" data-a="del" aria-label="Togli dall\'elenco">✕</button></div></div>';
     c.querySelector('.cname').textContent=m.name;
@@ -696,13 +721,28 @@ $('lib').addEventListener('click',e=>{const row=e.target.closest('.clip');if(!ro
 $('allBtn').onclick=()=>{if(busy||!media.length)return;pushUndo('tutti nella timeline');media.forEach(m=>items.push(mkClip(m)));render();};
 
 /* ---------- spazio usato e svuotamento della cache ---------- */
+function ramText(){return frameCache.size+' fotogrammi · '+mb(Math.max(0,ramBytes))+' di '+mb(RAM_MAX);}
+let ramT=0;function showRam(){const now=Date.now();if(now-ramT<500)return;ramT=now;const e=$('ramLcd');if(e)e.textContent=ramText();}
+async function storageInfo(){let u=null,files=0,fbytes=0;
+  try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();u=e.usage;}}catch(e){}
+  try{const all=await dbAll('files');files=all.length;all.forEach(f=>fbytes+=(f.blob&&f.blob.size)||0);}catch(e){}
+  return {u,files,fbytes};}
 async function showSpace(){try{let u=null;if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();u=e.usage;}
   let files=0;try{files=(await dbKeys('files')).length;}catch(e){}
   $('spaceLcd').textContent=(u!=null?mb(u):'?')+' · '+files+' file';}catch(e){$('spaceLcd').textContent='non disponibile';}}
-$('cacheBtn').onclick=async()=>{if(busy)return;$('cacheBtn').disabled=true;
-  frameCache.clear();frameQ.length=0;frameVideos.forEach(v=>{v.removeAttribute('src');v.load();v.remove();});frameVideos.clear();
-  await saveNow();await gcFiles(true);paintTrack(true);await showSpace();setStatus('Cache svuotata: fotogrammi della timeline e file non usati da nessun progetto.');
-  $('cacheBtn').disabled=false;};
+$('cacheBtn').onclick=async()=>{if(busy)return;$('cacheBtn').disabled=true;const box=$('cacheRes');box.hidden=false;box.innerHTML='Svuoto la cache…';
+  const before=await storageInfo(),rf=frameCache.size,rb=Math.max(0,ramBytes),nv=frameVideos.size;
+  frameCache.clear();ramBytes=0;frameQ.length=0;frameVideos.clear();thumbPool.forEach(v=>{v.removeAttribute('src');v.dataset.url='';v.__primed=false;});
+  await saveNow();const del=await gcFiles(true);
+  const after=await storageInfo();paintTrack(true);await showSpace();ramT=0;showRam();
+  const freed=before.u!=null&&after.u!=null?Math.max(0,before.u-after.u):del.bytes;
+  box.innerHTML='<b>✓ Cache svuotata</b><br>'+
+    'RAM: liberati <b>'+rf+'</b> fotogrammi ('+mb(rb)+')'+(nv?' e '+nv+' lettori video':'')+'<br>'+
+    'Archivio: eliminati <b>'+del.n+'</b> file non usati ('+mb(del.bytes)+')<br>'+
+    'Spazio usato: '+(before.u!=null?mb(before.u):'?')+' → <b>'+(after.u!=null?mb(after.u):'?')+'</b>'+(freed>0?' (−'+mb(freed)+')':'')+'<br>'+
+    'File nei progetti: '+after.files+' ('+mb(after.fbytes)+')'+
+    '<br><span style="color:#7d838c">I fotogrammi della timeline si rifanno da soli quando servono.</span>';
+  setStatus('Cache svuotata.');$('cacheBtn').disabled=false;};
 setTimeout(showSpace,1500);setInterval(()=>{if(!busy&&!document.hidden)showSpace();},30000);
 
 /* ---------- aiuto ---------- */
@@ -791,7 +831,14 @@ function setTile(e,c,key){const src=c.type==='img'?c.thumb:(frameCache.get(key)|
 /* fotogrammi per la timeline: preparati quando servono e tenuti in memoria */
 const frameCache=new Map(),frameWanted=new Set(),frameQ=[];let frameBusy=false;
 const frameVideos=new Map();   // un lettore nascosto per file (al massimo 3)
-function cachePut(key,url){frameCache.set(key,url);if(frameCache.size>900){const k=frameCache.keys().next().value;frameCache.delete(k);}
+// cache di lavoro in RAM: i fotogrammi della timeline restano in memoria fino a un tetto che dipende dal dispositivo
+let ramBytes=0;
+const RAM_MAX=(()=>{const dm=navigator.deviceMemory||(/iPhone|iPad/.test(navigator.userAgent)?4:8);return Math.min(400,Math.max(80,dm*30))*1048576;})();
+function ramSize(u){return Math.round((u||'').length*0.75);}
+function cachePut(key,url){const old=frameCache.get(key);if(old)ramBytes-=ramSize(old);
+  frameCache.delete(key);frameCache.set(key,url);ramBytes+=ramSize(url);
+  while(ramBytes>RAM_MAX&&frameCache.size){const k=frameCache.keys().next().value;ramBytes-=ramSize(frameCache.get(k));frameCache.delete(k);}
+  showRam();
   document.querySelectorAll('#lane i[data-key="'+key+'"]').forEach(e=>{e.style.backgroundImage='url('+url+')';e.classList.remove('ph');});}
 function requestFrame(m,fi,key){if(frameQ.some(q=>q.key===key))return;frameQ.push({m,fi,key});runFrames();}
 async function runFrames(){if(frameBusy)return;frameBusy=true;
@@ -805,11 +852,11 @@ async function runFrames(){if(frameBusy)return;frameBusy=true;
     const nat=await nativeThumbs(m,times,true);
     if(nat){batch.forEach((q,i)=>cachePut(q.key,nat[i]));continue;}
     let v=frameVideos.get(m);
-    if(!v){if(frameVideos.size>=3){const [k,old]=frameVideos.entries().next().value;old.removeAttribute('src');old.load();old.remove();frameVideos.delete(k);}
-      v=makeVideo();v.muted=true;v.src=m.url;frameVideos.set(m,v);
-      try{await once(v,'loadedmetadata',20000);}catch(e){}await primeVideo(v);}
+    if(!v){frameVideos.clear();
+      v=poolLoad(poolVideo(1),m.url);frameVideos.set(m,v);
+      if(v.readyState<1){try{await once(v,'loadedmetadata',20000);}catch(e){}}await primeVideo(v);}
     for(const q of batch){if(!frameWanted.has(q.key))continue;const u=await grabAt(v,q.fi/FPS+0.001,192,108);if(u)cachePut(q.key,u);}
-  }}finally{frameBusy=false;}}
+  }}finally{frameBusy=false;if(!frameQ.length){frameVideos.clear();poolFree(poolVideo(1));}}}
 
 function revealHead(){if(!items.length||layout.length!==items.length)return;const tr=$('track'),x=tToX(playT);   // porta in vista il segno rosso
   if(x<tr.scrollLeft+20||x>tr.scrollLeft+tr.clientWidth-40)tr.scrollLeft=Math.max(0,x-tr.clientWidth*0.4);}
@@ -920,7 +967,7 @@ const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){u
     d=Object.assign({from,sx:e.clientX,sy:e.clientY,pid:e.pointerId,ghost:null,thumb,name,moved:false},data);
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}}
   $('lib').addEventListener('pointerdown',e=>{if(busy)return;const row=e.target.closest('.clip');if(!row||e.target.closest('button')||e.target.closest('.strip'))return;
-    const onThumb=!!e.target.closest('.lgrip');if(!onThumb&&e.pointerType!=='mouse')return;   // col dito: solo dalla maniglia (il resto scorre)
+    const onThumb=!!e.target.closest('.lgrip,.lthumb');if(!onThumb&&e.pointerType!=='mouse')return;   // col dito: solo dalla maniglia (il resto scorre)
     if(onThumb)e.preventDefault();
     const m=media.find(x=>x.mid===+row.dataset.mid);if(m)start(e,'lib',{m},m.thumb,m.name);});
   $('lane').addEventListener('pointerdown',e=>{if(e.target.closest('.trim'))return;const el=e.target.closest('.tclip');if(!el)return;
@@ -952,11 +999,12 @@ const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){u
   };
   window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
   // righello: tocca o trascina per spostare la posizione
-  let scr=false;
-  $('ruler').addEventListener('pointerdown',e=>{if(!items.length||exporting)return;e.preventDefault();scr=true;unlockPv();
+  let scr=false,scrWas=false;
+  $('ruler').addEventListener('pointerdown',e=>{if(!items.length||exporting)return;e.preventDefault();scr=true;unlockPv();scrWas=playing;
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}stopPlay().then(()=>showFrame(xToT(trackX(e))));});
   $('ruler').addEventListener('pointermove',e=>{if(scr&&!playing)showFrame(xToT(trackX(e)));});
-  ['pointerup','pointercancel'].forEach(t=>$('ruler').addEventListener(t,()=>{scr=false;}));
+  ['pointerup','pointercancel'].forEach(t=>$('ruler').addEventListener(t,async()=>{if(!scr)return;scr=false;
+    if(resumeAfter(scrWas)){seekWant=null;await waitStopped();startPlay();}scrWas=false;}));
   // fascia col pallino: come il righello, e scorre la timeline vicino ai bordi
   let kz=false,kzWas=false;
   $('kzone').addEventListener('pointerdown',async e=>{if(!items.length||exporting)return;e.preventDefault();kz=true;unlockPv();$('phead').classList.add('drag');
@@ -964,7 +1012,7 @@ const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){u
   $('kzone').addEventListener('pointermove',e=>{if(!kz||playing)return;const tr=$('track'),r=tr.getBoundingClientRect();
     if(e.clientX<r.left+30)tr.scrollLeft-=12;else if(e.clientX>r.right-30)tr.scrollLeft+=12;showFrame(xToT(trackX(e)));});
   const kzEnd=async()=>{if(!kz)return;kz=false;$('phead').classList.remove('drag');
-    if(kzWas&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}kzWas=false;};
+    if(resumeAfter(kzWas)){seekWant=null;await waitStopped();startPlay();}kzWas=false;};
   ['pointerup','pointercancel'].forEach(t=>$('kzone').addEventListener(t,kzEnd));
 })();
 
@@ -1154,7 +1202,14 @@ async function startPlay(){
 async function stopPlay(){if(!playing)return;stopReq=true;await runP;while(playing)await sleep(10);}
 $('playBtn').onclick=()=>{unlockPv();if(playing)stopPlay();else startPlay();};
 
-async function jumpTo(t){const was=playing;await stopPlay();showFrame(t);revealHead();if(was){while(seekBusy)await sleep(10);startPlay();}}
+// play continuo: dopo ogni riposizionamento la riproduzione riparte da sola
+let contPlay=false;try{contPlay=localStorage.getItem('arnovideo-continuo')==='1';}catch(e){}
+function setCont(v){contPlay=v;$('contBtn').classList.toggle('on',v);$('contBtn').textContent=v?'▶ Continuo ✓':'▶ Continuo';
+  try{localStorage.setItem('arnovideo-continuo',v?'1':'0');}catch(e){}}
+$('contBtn').onclick=()=>{setCont(!contPlay);if(contPlay&&!playing&&items.length&&!busy)startPlay();};setCont(contPlay);
+async function waitStopped(){let n=0;while(playing&&n++<300)await sleep(10);}   // aspetta che la fermata in corso sia finita
+const resumeAfter=was=>(was||contPlay)&&playT<totalDur()-0.05&&items.length&&!exporting;
+async function jumpTo(t){const was=playing;await stopPlay();showFrame(t);revealHead();if(resumeAfter(was)){seekWant=null;await waitStopped();startPlay();}}
 $('prevItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
   const s=startOf(L.i);jumpTo(playT-s>1||L.i===0?s:startOf(L.i-1));};
 $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(playT);
@@ -1176,7 +1231,7 @@ $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(pla
   };
   const end=async()=>{if(!hold)return;const h=hold;hold=null;clearInterval(h.timer);h.btn.classList.remove('hold');$('speed').textContent='';
     if(!h.scan)showFrame(playT+h.dir*5);
-    if(h.was&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}};
+    if(resumeAfter(h.was)){seekWant=null;await waitStopped();startPlay();}};
   [['rew',-1],['ffw',1]].forEach(([id,d])=>{const b=$(id);
     b.addEventListener('pointerdown',e=>begin(e,d));
     b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);
@@ -1187,7 +1242,7 @@ $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(pla
 (function(){let was=false,active=false;const sc=$('scrub');
   sc.addEventListener('pointerdown',async()=>{unlockPv();if(active)return;active=true;was=playing;await stopPlay();});
   sc.addEventListener('input',async()=>{if(playing)await stopPlay();showFrame(+sc.value);});
-  const fine=async()=>{if(!active)return;active=false;if(was&&playT<totalDur()-0.05){while(seekBusy)await sleep(10);startPlay();}was=false;};
+  const fine=async()=>{if(!active)return;active=false;if(resumeAfter(was)){seekWant=null;await waitStopped();startPlay();}was=false;};
   sc.addEventListener('change',fine);sc.addEventListener('pointerup',fine);
 })();
 ['fmt','fit'].forEach(id=>$(id).addEventListener('change',()=>{if(!busy&&items.length)showFrame(playT);}));
@@ -1387,7 +1442,10 @@ async function gcFiles(now){   // elimina i file che nessun progetto usa più
   try{const ps=await dbAll('projects'),used=new Set();ps.forEach(p=>(p.media||p.items||[]).forEach(i=>i.fkey&&used.add(i.fkey)));
     media.forEach(i=>i.fkey&&used.add(i.fkey));
     [...undoSt,...redoSt].forEach(h=>(h.media||[]).forEach(m=>m.fkey&&used.add(m.fkey)));
-    for(const k of await dbKeys('files')){const t=+String(k).slice(1).split('-')[0];if(!used.has(k)&&(now||Date.now()-t>60000)&&!copyQ.some(c=>c.fkey===k))await dbDel('files',k);}}catch(e){}}
+    let n=0,bytes=0;
+    for(const k of await dbKeys('files')){const t=+String(k).slice(1).split('-')[0];
+      if(!used.has(k)&&(now||Date.now()-t>60000)&&!copyQ.some(c=>c.fkey===k)){try{const f=await dbGet('files',k);bytes+=(f&&f.blob&&f.blob.size)||0;}catch(e){}await dbDel('files',k);n++;}}
+    return {n,bytes};}catch(e){return {n:0,bytes:0};}}
 function clearItems(){media.forEach(m=>URL.revokeObjectURL(m.url));media.length=0;items.length=0;selId=null;}
 function projStats(p){const ms=p.media||p.items||[],byId={};ms.forEach(m=>byId[m.mid]=m);
   const cl=p.clips?p.clips.map(c=>({dur:c.dur,m:byId[c.mid]})).filter(c=>c.m):(p.items||[]).map(i=>({dur:i.dur,m:i}));
