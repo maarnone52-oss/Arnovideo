@@ -104,14 +104,16 @@ print("[forma d'onda] senza audio: «\(AudioPeaks.compute(url: media.appendingPa
 for f in ["giallo-ruotato-muto.mp4", "verde-verticale.mp4"] {
     let sem = DispatchSemaphore(value: 0); var res: URL? = nil; var err: String? = nil
     DispatchQueue.global().async {
-        VideoConvert.toMP4(url: media.appendingPathComponent(f), name: "prova-" + f, progress: { _ in }) { u, e in res = u; err = e; sem.signal() }
+        VideoConvert.toMP4(url: media.appendingPathComponent(f), name: "prova-" + f, size: "640x480", progress: { _ in }) { u, e in res = u; err = e; sem.signal() }
     }
     while sem.wait(timeout: .now() + 0.05) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
     if let r = res {
         let asset = AVURLAsset(url: r), d = asset.duration.seconds
         let v = asset.tracks(withMediaType: .video).first
         let sub = v.flatMap { ($0.formatDescriptions.first).map { CMFormatDescriptionGetMediaSubType($0 as! CMFormatDescription) } } ?? 0
-        print(String(format: "[MP4] %@ → %.2f s, video %@, tracce audio %d", f, d, sub == kCMVideoCodecType_H264 ? "H.264" : "altro", asset.tracks(withMediaType: .audio).count))
+        let ns = v.map { $0.naturalSize.applying($0.preferredTransform) } ?? .zero
+        print(String(format: "[MP4] %@ → %.2f s, video %@ %dx%d, tracce audio %d", f, d, sub == kCMVideoCodecType_H264 ? "H.264" : "altro", Int(abs(ns.width)), Int(abs(ns.height)), asset.tracks(withMediaType: .audio).count))
+        if max(abs(ns.width), abs(ns.height)) > 641 { print("PROVA FALLITA (risoluzione)"); exit(1) }
         if sub != kCMVideoCodecType_H264 || d < 0.5 { print("PROVA FALLITA (MP4)"); exit(1) }
         try? FileManager.default.removeItem(at: r)
     } else { print("PROVA FALLITA: conversione MP4 non riuscita: \(err ?? "")"); exit(1) }

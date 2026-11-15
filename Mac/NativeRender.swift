@@ -358,14 +358,17 @@ enum AudioConvert {
 
 /// Conversione di un video in MP4 (H.264 fino a 1920×1080, audio AAC): un formato unico che il Mac esporta sempre.
 enum VideoConvert {
-    static func toMP4(url: URL, name: String, progress: @escaping (Double) -> Void, done: @escaping (URL?, String?) -> Void) {
+    static func toMP4(url: URL, name: String, size: String = "1920x1080", progress: @escaping (Double) -> Void, done: @escaping (URL?, String?) -> Void) {
         let asset = AVURLAsset(url: url)
-        let preset = AVAssetExportPreset1920x1080
+        let presets = ["3840x2160": AVAssetExportPreset3840x2160, "1920x1080": AVAssetExportPreset1920x1080,
+                       "1280x720": AVAssetExportPreset1280x720, "960x540": AVAssetExportPreset960x540, "640x480": AVAssetExportPreset640x480]
+        var preset = presets[size] ?? AVAssetExportPreset1920x1080
+        if !AVAssetExportSession.exportPresets(compatibleWith: asset).contains(preset) { preset = AVAssetExportPreset1920x1080 }
         guard let ex = AVAssetExportSession(asset: asset, presetName: preset) else { done(nil, "il Mac non sa convertire questo video"); return }
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ArnoVideo/convertiti", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let safe = name.replacingOccurrences(of: "/", with: "-")
+        let safe = name.replacingOccurrences(of: "/", with: "-") + "-" + size
         var out = dir.appendingPathComponent(safe + ".mp4")
         var n = 2
         while FileManager.default.fileExists(atPath: out.path) { out = dir.appendingPathComponent("\(safe)-\(n).mp4"); n += 1 }

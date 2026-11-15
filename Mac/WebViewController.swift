@@ -238,7 +238,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 js("arnoNative.reply(\(Self.json(id)),{error:'file non trovato'})"); return
             }
             let name = (body["name"] as? String) ?? url.deletingPathExtension().lastPathComponent
-            VideoConvert.toMP4(url: url, name: name, progress: { [weak self] p in
+            VideoConvert.toMP4(url: url, name: name, size: (body["size"] as? String) ?? "1920x1080", progress: { [weak self] p in
                 self?.js("arnoNative.vprog(\(Self.json(id)),\(p))")
             }) { [weak self] out, err in
                 guard let self = self else { return }
