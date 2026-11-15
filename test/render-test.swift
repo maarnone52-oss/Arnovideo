@@ -8,6 +8,7 @@ let media = URL(fileURLWithPath: CommandLine.arguments[1])
 let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
+var musicFile = "musica.m4a"
 func run(fill: Bool, size: CGSize, name: String) -> Bool {
     let items = [
         RenderItem(isPhoto: false, url: media.appendingPathComponent("colori.mp4"), duration: 2, start: 2, volume: 0.25),   // tagliato: blu poi giallo, volume 25%
@@ -20,7 +21,7 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
     var result: Result<URL, Error>!
     var steps = 0
     let t0 = Date()
-    renderer.render(items: items, music: [MusicItem(url: media.appendingPathComponent("musica.m4a"), start: 2.0, offset: 0, duration: 1.5, volume: 1)], size: size, fill: fill, progress: { _ in steps += 1 }, done: { result = $0; sem.signal() })
+    renderer.render(items: items, music: [MusicItem(url: media.appendingPathComponent(musicFile), start: 2.0, offset: 0, duration: 1.5, volume: 1)], size: size, fill: fill, progress: { _ in steps += 1 }, done: { result = $0; sem.signal() })
     sem.wait()
     switch result! {
     case .failure(let e):
@@ -115,5 +116,8 @@ do {
 
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")
 let b = run(fill: true, size: CGSize(width: 720, height: 1280), name: "verticale-riempito")
+musicFile = "brano.mp3"
+let c = run(fill: false, size: CGSize(width: 1280, height: 720), name: "con-mp3")
+print("[MP3] esportazione con musica MP3: \(c ? "riuscita" : "NON riuscita")")
 print(a && b ? "PROVA RIUSCITA" : "PROVA FALLITA")
 exit(a && b ? 0 : 1)
