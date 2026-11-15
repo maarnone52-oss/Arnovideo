@@ -231,6 +231,9 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(res.map { Self.json($0) } ?? "undefined"))")
             }
 
+        case "zoom":
+            if let z = (body["value"] as? NSNumber)?.doubleValue { FileAccess.setZoom(webView, z) }
+
         case "readconv":
             // la pagina legge a pezzi un file convertito (solo dalla cartella «convertiti»)
             let id = body["id"] ?? ""

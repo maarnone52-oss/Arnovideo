@@ -15,4 +15,16 @@ enum FileAccess {
         call(config.preferences, "_setAllowFileAccessFromFileURLs:")
         call(config, "_setAllowUniversalAccessFromFileURLs:")
     }
+
+    /// Ingrandimento della pagina (come ⌘− / ⌘+ in Safari): la pagina si ridispone, più spazio di lavoro.
+    static func setZoom(_ webView: WKWebView, _ z: Double) {
+        let sel = NSSelectorFromString("_setPageZoomFactor:")
+        if webView.responds(to: sel) {
+            typealias SetD = @convention(c) (AnyObject, Selector, Double) -> Void
+            let f = unsafeBitCast(webView.method(for: sel), to: SetD.self)
+            f(webView, sel, max(0.3, min(2, z)))
+        } else if #available(macOS 11.0, *) {
+            webView.pageZoom = CGFloat(max(0.3, min(2, z)))
+        }
+    }
 }
