@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<script>/* dimensione dell'interfaccia (iPhone e iPad): 75% = più spazio di lavoro, come in ARNOCLICK */
+(function(){try{var t=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+var s=parseFloat(localStorage.getItem('arnovideo.uiScale'));
+if(t&&s>=0.5&&s<0.999){document.documentElement.classList.add('uis');
+document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale='+s+', minimum-scale='+s+', maximum-scale='+s+', user-scalable=no, viewport-fit=cover');}}catch(e){}})();</script>
 <title>ARNOVIDEO</title>
 <meta name="theme-color" content="#0d0e10">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -67,7 +72,7 @@ button{font:inherit;color:var(--text);cursor:pointer}
 .clip.vid{border-top:3px solid #ffb21e}
 /* vista a elenco: finestra che scorre in verticale, nome del file accanto */
 #lib{flex-direction:column;overflow-x:hidden;overflow-y:auto;max-height:min(440px,58vh);min-height:120px;gap:8px;padding:8px;overscroll-behavior:contain;scroll-snap-type:none}
-#lib .clip{-webkit-user-select:none;user-select:none;width:100%;display:flex;align-items:stretch;border-top:1px solid #4b5058;border-left:4px solid #ffb21e}
+#lib .clip{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;position:relative;width:100%;display:flex;align-items:stretch;border-top:1px solid #4b5058;border-left:4px solid #ffb21e}
 #lib .clip.img{border-left-color:#38c6ff}
 #lib .thumb{flex:none;width:132px;height:auto;min-height:74px;aspect-ratio:16/9;background-size:contain;background-color:#000}
 #lib .thumb .grip{font-size:11px}
@@ -324,6 +329,20 @@ body.showhelp .help:not([hidden]){display:block!important}
 #zslider.drag #zthumb::after{transform:scale(1.15)}
 #zLbl{min-width:70px}
 
+/* anteprima rapida: tenendo premuto 1 s un file dell'elenco (si chiude alzando il dito) */
+#lib .clip .hold{position:absolute;left:0;bottom:0;height:3px;width:0;background:#46ff7a;pointer-events:none}
+#lib .clip.holding .hold{width:100%;transition:width .75s linear}
+#peek{position:fixed;z-index:96;pointer-events:none;width:240px;background:#0a0403;border:2px solid #46ff7a;border-radius:10px;padding:6px;box-shadow:0 12px 34px rgba(0,0,0,.75);box-sizing:border-box}
+#peek[hidden]{display:none}
+#peek .ph{display:flex;align-items:center;gap:6px;margin-bottom:5px;font:600 12px Helvetica,Arial;color:#cfd3da}
+#peek .ph span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#peek .ph button{min-height:26px;height:26px;width:30px;padding:0;font-size:14px}
+#peek video,#peek img{display:block;width:100%;max-height:50vh;border-radius:6px;background:#000;object-fit:contain}
+#peek audio{display:block;width:100%}
+#peek .pa{font-size:34px;text-align:center;color:#b47cff;padding:6px 0}
+/* interfaccia al 75%: i comandi dell'anteprima vanno a capo invece di uscire dal riquadro */
+html.uis .mini{flex-wrap:wrap;justify-content:center;row-gap:8px}
+html.uis .pvbox:not(.float) .transport{flex-wrap:wrap;justify-content:center}
 /* === 1.10.1: modifiche fatte in ARNODESIGN sullo schermo iPhone 15 === */
 @media (max-width:520px){
 /* intestazione: riquadro del logo più stretto e alto, ARNO sopra e VIDEO sotto spostato a destra,
@@ -560,6 +579,11 @@ body.showhelp .help:not([hidden]){display:block!important}
         <div class="row" style="margin-top:6px;flex-wrap:nowrap"><span class="lcd" id="spaceLcd" style="font-size:16px;flex:1">–</span><button class="btn sm" id="cacheBtn" type="button">Svuota cache</button></div>
         <div class="ramrow"><span class="lbl">cache in RAM</span><span class="lcd g" id="ramLcd">–</span></div>
         <div id="cacheRes" hidden></div></label>
+      <label id="uisRow" hidden><span class="lbl">Dimensione dell'interfaccia</span>
+        <select id="uisSel">
+          <option value="1">100% (normale)</option>
+          <option value="0.75">75% (più spazio di lavoro)</option>
+        </select></label>
       <label><span class="lbl">Formato del fotogramma</span>
         <select id="frameFmt">
           <option value="jpg" selected>JPEG (foto, file più piccolo)</option>
@@ -572,10 +596,11 @@ body.showhelp .help:not([hidden]){display:block!important}
 </main>
 <div id="hidden"></div>
 <div id="trimTip" hidden></div>
+<div id="peek" hidden><div class="ph"><span></span></div><div class="pb"></div></div>
 
 <script>
 'use strict';
-const VERSION='1.19.2';
+const VERSION='1.24.0';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -628,6 +653,90 @@ async function addFiles(files){if(!files.length||busy)return;
   setStatus('File caricati: trascinali nella timeline.');
   runCopies();
 }
+/* ---------- conversione di un file audio (MP3, WAV…) in AAC (.m4a) ----------
+   Mac (app): la fa il Mac. Altrove: codificatore AAC del sistema (WebCodecs); se manca, registrazione in tempo reale. */
+function m4aFile(sr,ch,asc,frames){   // impacchetta i pacchetti AAC in un file .m4a
+  const n=frames.length,dur=n*1024,B=[];
+  const u32=v=>[v>>>24&255,v>>>16&255,v>>>8&255,v&255],u16=v=>[v>>8&255,v&255],str=t=>[...t].map(c=>c.charCodeAt(0));
+  const box=(t,...parts)=>{const body=[].concat(...parts);return u32(body.length+8).concat(str(t),body);};
+  const full=(t,vf,...parts)=>box(t,u32(vf),...parts);
+  const desc=(tag,body)=>[tag,0x80,0x80,0x80,body.length].concat(body);
+  const esds=full('esds',0,desc(3,[0,0,0].concat(desc(4,[0x40,0x15,0,0,0].concat(u32(256000),u32(256000),desc(5,[...asc]))),desc(6,[2]))));
+  const mp4a=box('mp4a',[0,0,0,0,0,0],u16(1),[0,0,0,0,0,0,0,0],u16(ch),u16(16),[0,0,0,0],u32(sr*65536>>>0),esds);
+  const sizes=[];frames.forEach(f=>sizes.push(...u32(f.length)));
+  const mtx=[].concat(u32(0x10000),u32(0),u32(0),u32(0),u32(0x10000),u32(0),u32(0),u32(0),u32(0x40000000));
+  const ftyp=box('ftyp',str('M4A '),u32(0),str('M4A mp42isom'));
+  const mk=co=>box('moov',
+    full('mvhd',0,u32(0),u32(0),u32(sr),u32(dur),u32(0x10000),u16(0x100),[0,0,0,0,0,0,0,0,0,0],mtx,new Array(24).fill(0),u32(2)),
+    box('trak',full('tkhd',7,u32(0),u32(0),u32(1),u32(0),u32(dur),[0,0,0,0,0,0,0,0],u16(0),u16(0),u16(0x100),u16(0),mtx,u32(0),u32(0)),
+      box('mdia',full('mdhd',0,u32(0),u32(0),u32(sr),u32(dur),u16(0x55c4),u16(0)),
+        full('hdlr',0,u32(0),str('soun'),u32(0),u32(0),u32(0),str('SoundHandler'),[0]),
+        box('minf',full('smhd',0,u32(0)),box('dinf',full('dref',0,u32(1),full('url ',1))),
+          box('stbl',full('stsd',0,u32(1),mp4a),full('stts',0,u32(1),u32(n),u32(1024)),full('stsc',0,u32(1),u32(1),u32(n),u32(1)),
+            full('stsz',0,u32(0),u32(n),sizes),full('stco',0,u32(1),u32(co)))))));
+  let moov=mk(0);const off=ftyp.length+moov.length+8;moov=mk(off);
+  let tot=0;frames.forEach(f=>tot+=f.length);
+  return new Blob([new Uint8Array(ftyp),new Uint8Array(moov),new Uint8Array(u32(tot+8).concat(str('mdat'))),...frames],{type:'audio/mp4'});}
+async function aacWebCodecs(ab,prog){
+  if(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined')return null;
+  const sr=ab.sampleRate,ch=Math.min(2,ab.numberOfChannels),cfg={codec:'mp4a.40.2',sampleRate:sr,numberOfChannels:ch,bitrate:256000,aac:{format:'aac'}};
+  try{const sp=await AudioEncoder.isConfigSupported(cfg);if(!sp||!sp.supported)return null;}catch(e){return null;}
+  const frames=[];let asc=null,err=null;
+  const enc=new AudioEncoder({output:(c,meta)=>{let b=new Uint8Array(c.byteLength);c.copyTo(b);
+      if(b.length>7&&b[0]===0xFF&&(b[1]&0xF6)===0xF0)b=b.subarray((b[1]&1)?7:9);   // eventuale intestazione ADTS
+      frames.push(b);if(meta&&meta.decoderConfig&&meta.decoderConfig.description)asc=new Uint8Array(meta.decoderConfig.description.buffer||meta.decoderConfig.description);},
+    error:e=>{err=e;}});
+  enc.configure(cfg);
+  const L=ab.length,FR=sr,chans=[];for(let c=0;c<ch;c++)chans.push(ab.getChannelData(c));
+  for(let i=0;i<L&&!err;i+=FR){const n=Math.min(FR,L-i),data=new Float32Array(n*ch);
+    for(let c=0;c<ch;c++)data.set(chans[c].subarray(i,i+n),c*n);
+    const ad=new AudioData({format:'f32-planar',sampleRate:sr,numberOfFrames:n,numberOfChannels:ch,timestamp:Math.round(i/sr*1e6),data});
+    enc.encode(ad);ad.close();prog(i/L);
+    while(enc.encodeQueueSize>8)await sleep(5);if((i/FR)%10===0)await sleep(0);}
+  await enc.flush();try{enc.close();}catch(e){}
+  if(err)throw err;if(!frames.length)return null;
+  if(!asc){const R=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350],fi=R.indexOf(sr);
+    asc=new Uint8Array([(2<<3)|(fi>>1),((fi&1)<<7)|(ch<<3)]);}
+  return m4aFile(sr,ch,asc,frames);}
+async function aacRealtime(ab,prog){   // ultima possibilità: si registra il brano mentre suona (in silenzio), dura quanto il brano
+  if(typeof MediaRecorder==='undefined'||!MediaRecorder.isTypeSupported||!MediaRecorder.isTypeSupported('audio/mp4'))return null;
+  audioInit();const d=actx.createMediaStreamDestination(),src=actx.createBufferSource();src.buffer=ab;src.connect(d);
+  const rec=new MediaRecorder(d.stream,{mimeType:'audio/mp4',audioBitsPerSecond:256000}),parts=[];
+  rec.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);};
+  const fin=new Promise(r=>rec.onstop=r);rec.start(1000);const t0=actx.currentTime;src.start();
+  await new Promise(r=>{src.onended=r;const iv=setInterval(()=>{prog((actx.currentTime-t0)/ab.duration);if(!src.buffer)clearInterval(iv);},250);src.addEventListener('ended',()=>clearInterval(iv));});
+  rec.stop();await fin;try{src.disconnect();}catch(e){}
+  return new Blob(parts,{type:'audio/mp4'});}
+function nativeAAC(m){const nr=nativeRender();if(!nr)return Promise.resolve(null);const id='a'+(++thumbReq),key=m.name+'|'+((m.file&&m.file.size)||m.size||0);
+  const b64=part=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result);res(s.slice(s.indexOf(',')+1));};r.onerror=()=>rej(r.error);r.readAsDataURL(part);});
+  return (async()=>{
+    const miss=await new Promise(r=>{const cid='c'+(++thumbReq);arnoNative._wait[cid]=r;nr.postMessage({cmd:'check',id:cid,keys:[key]});setTimeout(()=>{if(arnoNative._wait[cid]){delete arnoNative._wait[cid];r(null);}},10000);});
+    if(miss===null)return null;
+    if(miss.length){const f=m.file,CH=4*1048576,count=Math.max(1,Math.ceil(f.size/CH));
+      for(let i=0;i<count;i++){loadUI(i/count*40,'Converto in AAC · invio al Mac…');nr.postMessage({cmd:'upload',key,index:i,count,base64:await b64(f.slice(i*CH,(i+1)*CH))});}}
+    loadUI(50,'Converto in AAC · «'+m.name+'»…');
+    const res=await new Promise(r=>{arnoNative._wait[id]=r;nr.postMessage({cmd:'aac',id,key});setTimeout(()=>{if(arnoNative._wait[id]){delete arnoNative._wait[id];r(null);}},600000);});
+    if(!res)return null;const bin=atob(res),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    return new Blob([u],{type:'audio/mp4'});})();}
+async function toAAC(m){if(busy||!m.file)return;
+  setBusy(true);loading=true;const prog=p=>loadUI(Math.round(10+p*85),'Converto in AAC · «'+m.name+'» · '+Math.round(p*100)+'%');
+  let blob=null,how='';
+  try{blob=await nativeAAC(m);how='Mac';
+    if(!blob){loadUI(3,'Converto in AAC · leggo «'+m.name+'»…');audioInit();
+      const ab=await new Promise((ok,ko)=>{m.file.arrayBuffer().then(buf=>{const p=actx.decodeAudioData(buf,ok,ko);if(p&&p.then)p.then(ok,ko);},ko);});
+      blob=await aacWebCodecs(ab,prog);how='codificatore';
+      if(!blob){setStatus('Conversione in tempo reale: dura quanto il brano ('+fmtT(ab.duration)+')…');blob=await aacRealtime(ab,prog);how='tempo reale';}}
+    if(!blob)throw new Error('questo dispositivo non ha un codificatore AAC');
+    const name=m.name.replace(/\.[^.]+$/,'')+'.m4a',f=new File([blob],name,{type:'audio/mp4'});
+    const it={mid:++uid,type:'aud',file:f,url:URL.createObjectURL(f),name,dur:0,w:0,h:0,thumb:'',size:f.size,fkey:'f'+Date.now()+'-'+Math.random().toString(36).slice(2,8)};
+    await loadAudio(it);if(m.peaks){it.peaks=m.peaks;}
+    pushUndo('conversione in AAC di «'+m.name+'»');
+    const k=media.indexOf(m);if(k>=0)media.splice(k,1,it);else media.push(it);
+    music.forEach(mc=>{if(mc.media===m){mc.media=it;mc.tin=Math.min(mc.tin,Math.max(0,it.dur-0.1));mc.dur=Math.min(mc.dur,it.dur-mc.tin);}});
+    copyQ.push(it);runCopies();
+    setStatus('«'+name+'» pronto ('+mb(f.size)+'): sostituisce «'+m.name+'» nell\'elenco e nella traccia musicale.');
+  }catch(e){setStatus('Conversione in AAC non riuscita: '+(e&&e.message||e),true);}
+  finally{loading=false;loadUI(null);setBusy(false);render();}}
 // copia dei file nell'archivio del progetto, uno alla volta, senza bloccare il lavoro
 const copyQ=[];let copying=false;
 async function runCopies(){if(copying)return;copying=true;loading=true;
@@ -775,7 +884,7 @@ function renderLib(){
     c.innerHTML='<div class="lgrip" title="Trascina nella timeline">⠿<small>'+(m.type==='img'?'FOTO':m.type==='aud'?'AUDIO':'VIDEO')+'</small></div>'+
       (m.type==='aud'?'<div class="lthumb aud">♪</div>':'<div class="lthumb'+(m.thumb?'':' wait')+'"'+(m.thumb?' style="background-image:url('+m.thumb+')"':'')+'></div>')+
       '<div class="cbody"><div class="cname"></div><div class="cdur">'+fmtT(m.dur)+'</div>'+((u||mu)?'<span class="used">nella timeline'+((u||mu)>1?' ×'+(u||mu):'')+'</span>':'')+
-      '<div class="cbtns"><button class="btn xs" data-a="add" style="padding:0 10px">＋ Timeline</button><button class="btn xs" data-a="del" aria-label="Togli dall\'elenco">✕</button></div></div>';
+      '<div class="cbtns">'+(m.type==='aud'&&!/\.(m4a|aac|mp4)$/i.test(m.name)?'<button class="btn xs" data-a="aac" title="Converti in AAC (.m4a)" style="padding:0 8px">→ AAC</button>':'')+'<button class="btn xs" data-a="add" style="padding:0 10px">＋ Timeline</button><button class="btn xs" data-a="del" aria-label="Togli dall\'elenco">✕</button></div></div><i class="hold"></i>';
     c.querySelector('.cname').textContent=m.name;
     box.appendChild(c);});
   box.scrollTop=st;$('allBtn').disabled=!media.length||busy;
@@ -787,6 +896,7 @@ $('lib').addEventListener('click',e=>{const row=e.target.closest('.clip');if(!ro
   if(busy)return;
   if(b.dataset.a==='add'){pushUndo('aggiunta di «'+m.name+'»');
     if(m.type==='aud'){const mc=mkMusic(m,playT);music.push(mc);selMusic=mc.id;selId=null;}else{items.push(mkClip(m));selId=items[items.length-1].id;selMusic=null;}render();}
+  else if(b.dataset.a==='aac'){toAAC(m);}
   else if(b.dataset.a==='del'){pushUndo('rimozione di «'+m.name+'» dall\'elenco');media.splice(media.indexOf(m),1);
     for(let i=music.length-1;i>=0;i--)if(music[i].media===m)music.splice(i,1);
     for(let i=items.length-1;i>=0;i--)if(items[i].media===m)items.splice(i,1);render();}
@@ -822,14 +932,18 @@ setTimeout(showSpace,1500);setInterval(()=>{if(!busy&&!document.hidden)showSpace
 let showHelp=false;try{showHelp=localStorage.getItem('arnovideo-aiuto')==='1';}catch(e){}
 function setHelp(v){showHelp=v;document.body.classList.toggle('showhelp',v);$('helpBtn').classList.toggle('on',v);$('helpBtn').textContent=v?'✓ Aiuto visibile':'？ Aiuto';
   try{localStorage.setItem('arnovideo-aiuto',v?'1':'0');}catch(e){}}
-$('helpBtn').onclick=()=>setHelp(!showHelp);setHelp(showHelp);
+$('helpBtn').onclick=()=>setHelp(!showHelp);
+(function(){const t=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);if(!t)return;
+  let v=1;try{v=parseFloat(localStorage.getItem('arnovideo.uiScale'))||1;}catch(e){}$('uisRow').hidden=false;$('uisSel').value=v<0.999?'0.75':'1';
+  $('uisSel').onchange=async()=>{try{localStorage.setItem('arnovideo.uiScale',$('uisSel').value);}catch(e){}setStatus('Cambio la dimensione…');try{await saveNow();}catch(e){}location.reload();};})();setHelp(showHelp);
 
 /* ---------- anteprima ripetuta sopra la timeline (copia dell'anteprima principale) ---------- */
 (function(){const c2=$('cv2'),x2=c2.getContext('2d');let last=0;
+  let ver=-1;
   function loop(t){requestAnimationFrame(loop);if(document.hidden||t-last<33)return;last=t;
-    const cv=$('cv');const w=Math.min(960,cv.width),h=Math.round(w*cv.height/cv.width);
-    if(c2.width!==w||c2.height!==h){c2.width=w;c2.height=h;}
-    try{x2.drawImage(cv,0,0,w,h);}catch(e){}
+    const cv=$('cv');const w=Math.min(640,cv.width),h=Math.round(w*cv.height/cv.width);
+    if(c2.width!==w||c2.height!==h){c2.width=w;c2.height=h;ver=-1;}
+    if(ver!==cvVer||!(playing||exporting)){ver=cvVer;try{x2.drawImage(cv,0,0,w,h);}catch(e){}}   // copia solo i fotogrammi nuovi
     $('clock2').textContent=$('clock').textContent.split(' / ')[0];
     $('play2').textContent=$('playBtn').textContent;$('play2').classList.toggle('red',playing);$('play2').classList.toggle('play',!playing);
     const dis=$('playBtn').disabled;document.querySelectorAll('#mirrorBox [data-m]').forEach(b=>b.disabled=dis);}
@@ -1076,6 +1190,35 @@ function revealHead(){if(!items.length||layout.length!==items.length)return;cons
 /* etichetta del taglio: sempre sopra la timeline (il dito non la copre), allineata al dito ma dentro lo schermo */
 function placeTip(tip,cx){const r=$('track').getBoundingClientRect(),w=tip.offsetWidth||200,h=tip.offsetHeight||30,vw=window.innerWidth;
   tip.style.left=Math.max(6,Math.min(vw-w-6,cx-w/2))+'px';tip.style.top=Math.max(6,r.top-h-10)+'px';}
+/* ---------- anteprima rapida: tieni premuto 1 secondo un file dell'elenco ---------- */
+const HOLD_MS=1000;
+function peekClose(){const pk=$('peek');if(pk.hidden)return;const el=pk.querySelector('video,audio');if(el){try{el.pause();el.removeAttribute('src');el.load();}catch(e){}}
+  pk.querySelector('.pb').innerHTML='';pk.hidden=true;}
+function peekOpen(m,row){peekClose();const pk=$('peek'),pb=pk.querySelector('.pb');pk.querySelector('.ph span').textContent=m.name;let el;
+  if(m.type==='img'){el=document.createElement('img');el.src=m.url;}
+  else{el=document.createElement(m.type==='aud'?'audio':'video');el.controls=false;el.disablePictureInPicture=true;el.disableRemotePlayback=true;el.playsInline=true;el.setAttribute('playsinline','');el.preload='auto';
+    if(m.thumb&&m.type==='vid')el.poster=m.thumb;   // subito la miniatura, niente schermo nero mentre carica
+    el.src=m.url;try{el.volume=Math.max(0.05,monVol);}catch(e){}
+    el.play().catch(()=>{el.muted=true;el.play().catch(()=>{});});}   // se il telefono non lascia partire l'audio, parte almeno l'immagine
+  if(m.type==='aud')pb.innerHTML='<div class="pa">♪</div>';pb.appendChild(el);pk.hidden=false;
+  const place=()=>{const cur=document.querySelector('#lib .clip[data-mid="'+m.mid+'"]')||row,r=cur.getBoundingClientRect(),w=pk.offsetWidth,h=pk.offsetHeight,vw=window.innerWidth;   // a destra e sopra la riga del file
+    pk.style.left=Math.max(6,Math.min(vw-w-6,r.right-w))+'px';pk.style.top=Math.max(6,r.top-h-6)+'px';};
+  place();el.addEventListener(m.type==='img'?'load':'loadedmetadata',place,{once:true});return el;}
+document.addEventListener('pointerdown',e=>{if(!$('peek').hidden&&!e.target.closest('#peek')&&!e.target.closest('#lib .clip'))peekClose();},true);
+(function(){let h=null;
+  const cancel=()=>{if(!h)return;clearTimeout(h.t);clearTimeout(h.t0);h.row.classList.remove('holding');h=null;};
+  $('lib').addEventListener('pointerdown',e=>{cancel();const row=e.target.closest('.clip');if(!row||e.target.closest('button')||exporting)return;
+    const m=media.find(x=>x.mid===+row.dataset.mid);if(!m)return;
+    h={m,row,pid:e.pointerId,sx:e.clientX,sy:e.clientY,fired:null};
+    h.t0=setTimeout(()=>{if(h)row.classList.add('holding');},250);   // barretta verde: mostra che sta per aprirsi
+    h.t=setTimeout(()=>{if(!h)return;row.classList.remove('holding');h.fired=peekOpen(m,row);try{navigator.vibrate&&navigator.vibrate(15);}catch(e){}},HOLD_MS);});
+  window.addEventListener('pointermove',e=>{if(h&&!h.fired&&e.pointerId===h.pid&&Math.hypot(e.clientX-h.sx,e.clientY-h.sy)>8)cancel();});
+  const up=e=>{if(!h||e.pointerId!==h.pid)return;const f=h.fired;cancel();if(f)peekClose();};   // si vede solo finché tieni premuto
+  window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
+  $('lib').addEventListener('scroll',()=>{if(h&&!h.fired)cancel();},{passive:true});
+  $('lib').addEventListener('touchmove',e=>{if(h&&h.fired)e.preventDefault();},{passive:false});   // mentre guardi, l'elenco non scorre
+  $('lib').addEventListener('contextmenu',e=>{if(e.target.closest('.clip'))e.preventDefault();});})();
+
 /* ---------- traccia musicale: selezione e spostamento ---------- */
 (function(){let mv=null;
   $('mlane').addEventListener('pointerdown',e=>{const el=e.target.closest('.mclip');if(!el||busy)return;const mc=music.find(x=>x.id===+el.dataset.mid);if(!mc)return;
@@ -1303,6 +1446,9 @@ function outSize(){
   const k=Math.min(1,1920/Math.max(w,h));w=Math.round(w*k/2)*2;h=Math.round(h*k/2)*2;return {w,h};
 }
 
+// anteprima più leggera: il riquadro è piccolo, basta al massimo 960 punti (l'esportazione resta a piena risoluzione)
+function pvSize(){const o=outSize(),k=Math.min(1,960/Math.max(o.w,o.h));return {w:Math.round(o.w*k/2)*2,h:Math.round(o.h*k/2)*2};}
+let cvVer=0;   // cresce a ogni nuovo disegno dell'anteprima: la seconda finestra copia solo quando serve
 /* ---------- motore di riproduzione (anteprima ed esportazione) ---------- */
 let actx=null,dest=null,mon=null;
 /* ---------- cursori stile mixer ---------- */
@@ -1376,9 +1522,14 @@ function syncMusic(T){if(!music.length){musicStop();return;}musicInit();
   if(!mc){if(!musicEl.paused)musicEl.pause();musicCur=null;return;}
   if(musicCur!==mc){musicCur=mc;if(musicEl.dataset.url!==mc.media.url){musicEl.src=mc.media.url;musicEl.dataset.url=mc.media.url;}applyMusicVol();}
   const want=mc.tin+(T-mc.start);
-  if(musicEl.readyState>=1){if(Math.abs(musicEl.currentTime-want)>0.25)musicEl.currentTime=want;}
+  // la musica non si sposta a ogni piccola differenza (ogni spostamento si sente come uno scatto, soprattutto con gli MP3):
+  // si sposta solo alla partenza o se è lontana più di 1 s; le piccole differenze si recuperano accelerando o rallentando appena
+  if(musicEl.readyState>=1){const d=musicEl.currentTime-want;
+    if(musicEl.paused?Math.abs(d)>0.05:Math.abs(d)>1){musicEl.currentTime=want;musicRate(1);}
+    else{const k=Math.abs(d);musicRate(k<0.05?1:(d>0?(k>0.3?0.92:0.96):(k>0.3?1.08:1.04)));}}
   if(musicEl.paused&&musicEl.readyState>=1){const p=musicEl.play();if(p&&p.catch)p.catch(()=>{});}}
-function musicStop(){if(musicEl&&!musicEl.paused)musicEl.pause();musicCur=null;}
+function musicRate(r){if(musicEl&&musicEl.playbackRate!==r){try{musicEl.preservesPitch=musicEl.webkitPreservesPitch=true;musicEl.playbackRate=r;}catch(e){}}}
+function musicStop(){if(musicEl&&!musicEl.paused)musicEl.pause();musicRate(1);musicCur=null;}
 
 let busC=null,busM=null,meterC=null,meterM=null;   // mixer: audio delle clip e musica
 function audioInit(){
@@ -1414,7 +1565,7 @@ async function prepare(p,it){
 }
 
 async function runSequence(rec,startT=0){
-  const cv=$('cv'),{w,h}=outSize();cv.width=w;cv.height=h;fitCv();
+  const cv=$('cv'),{w,h}=rec?outSize():pvSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;fitCv();}
   const x=cv.getContext('2d'),mode=$('fit').value,total=totalDur();
   audioInit();if(actx&&actx.state!=='running'){try{await actx.resume();}catch(e){}}
   if(mon)mon.gain.value=rec?0.0001:Math.max(0.0001,monVol*monVol);    // in esportazione non si sente (resta registrato)
@@ -1433,15 +1584,17 @@ async function runSequence(rec,startT=0){
     for(let n=0;n<2;n++){j=nextVid(j+1);if(j<0)break;if(plan.has(j))continue;
       const used=new Set([busyP,...[...plan.values()].map(e=>e.p)]);
       let k=0;while(k<3&&used.has(player(k)))k++;if(k>=3)break;
-      const pl=player(k);plan.set(j,{p:pl,prom:prepare(pl,items[j])});}};
+      const pl=player(k),e={p:pl,ready:false};e.prom=prepare(pl,items[j]).then(()=>{e.ready=true;});plan.set(j,e);}};
   ensurePlan(first,null);
   if(rec)rec.start(1000);
   for(let i=first;i<items.length&&!stopReq;i++){
     const it=items[i],o=i===first?off:0;mark(i);setStatus((rec?'Esporto':'Riproduzione')+' · '+(i+1)+'/'+items.length+' · '+it.name);
     if(it.type==='img'){
       const t0=performance.now()-o*1000;
+      let drawn=0;
       while(!stopReq){const el=(performance.now()-t0)/1000;if(el>=it.dur)break;
-        clear();drawFit(x,it.el,it.w,it.h,w,h,mode);tick(done+el);await new Promise(r=>requestAnimationFrame(r));}
+        if(!drawn||(rec&&performance.now()-drawn>=33)){clear();drawFit(x,it.el,it.w,it.h,w,h,mode);drawn=performance.now();cvVer++;}   // la foto non cambia: si ridisegna solo per la registrazione
+        tick(done+el);await new Promise(r=>requestAnimationFrame(r));}
       done+=it.dur;continue;
     }
     // video
@@ -1449,17 +1602,28 @@ async function runSequence(rec,startT=0){
     for(const [j,e] of plan)if(j<i)plan.delete(j);
     ensurePlan(i+1,p);                 // mentre suona questa, si preparano le due successive
     const v=p.v;
+    const pre=p.pre&&!v.paused;p.pre=0;   // già partito in anticipo (muto) alla fine della clip prima
     const want=(it.tin||0)+o;   // controlla di partire davvero dal punto giusto (taglio in testa)
-    if(Math.abs(v.currentTime-want)>0.04){v.currentTime=want;try{await once(v,'seeked',4000);}catch(e){}}
+    if(!pre&&Math.abs(v.currentTime-want)>0.04){v.currentTime=want;try{await once(v,'seeked',4000);}catch(e){}}
     curClip=it;curPlayer=p;curAOn=audioOn(it,o);applyClipVol();   // volume della clip (entra anche nel video esportato)
-    try{await v.play();}catch(e){setStatus('Il video «'+it.name+'» non parte: '+e.message,true);done+=it.dur;continue;}
+    if(!pre){try{await v.play();}catch(e){setStatus('Il video «'+it.name+'» non parte: '+e.message,true);done+=it.dur;continue;}}
+    const nx=items[i+1]&&items[i+1].type==='vid'?items[i+1]:null;let np=null;
+    let lastDraw=-1;
     await new Promise(res=>{let fin=false;
       const stop=()=>{if(fin)return;fin=true;res();};
       v.addEventListener('ended',stop,{once:true});
       const loop=()=>{if(fin)return;if(stopReq){v.pause();return stop();}
-        if(v.readyState>=2){clear();drawFit(x,v,v.videoWidth,v.videoHeight,w,h,mode);}
+        if(v.readyState>=2&&v.currentTime!==lastDraw){lastDraw=v.currentTime;clear();drawFit(x,v,v.videoWidth,v.videoHeight,w,h,mode);cvVer++;}   // solo se c'è un fotogramma nuovo
         const lt=v.currentTime-(it.tin||0);tick(done+Math.max(0,lt));gateAudio(lt);
-        if(lt>=it.dur-0.035){v.pause();return stop();}     // fine del pezzo (un fotogramma prima: la clip dopo parte senza pausa)
+        // cambio clip senza buco: la clip dopo parte in anticipo (muta) del tempo che il telefono impiega ad avviarla,
+        // e si passa a lei appena le sue immagini si muovono
+        if(nx&&!np&&!rec&&lt>=it.dur-preLat-0.01){const e=plan.get(i+1);
+          if(e&&e.ready&&e.p.v.paused){np=e.p;if(np.g)np.g.gain.value=0;np.pre=performance.now();np.t0=np.v.currentTime;const pr=np.v.play();if(pr&&pr.catch)pr.catch(()=>{np.pre=0;});}}
+        if(np&&np.pre&&np.v.currentTime>np.t0+0.004){const lat=(performance.now()-np.pre)/1000;
+          preLat=Math.max(0.03,Math.min(0.5,preLat*0.6+lat*0.4));try{localStorage.setItem('arnovideo-avvio',preLat.toFixed(3));}catch(e){}
+          v.pause();return stop();}
+        if(lt>=it.dur-0.035){if(np&&np.pre&&performance.now()-np.pre<600){requestAnimationFrame(loop);return;}   // aspetta un attimo la clip dopo
+          v.pause();return stop();}     // fine del pezzo (un fotogramma prima: la clip dopo parte senza pausa)
         if(v.currentTime>=it.dur-0.02&&v.paused&&!(it.tin>0))return stop();
         requestAnimationFrame(loop);};
       requestAnimationFrame(loop);
@@ -1467,6 +1631,7 @@ async function runSequence(rec,startT=0){
     v.pause();p.warm=null;done+=it.dur;
   }
   if(rec&&rec.state!=='inactive'){await sleep(150);rec.stop();}
+  players.forEach(q=>{if(q&&q.pre){q.pre=0;try{q.v.pause();}catch(e){}}});
   curClip=null;curPlayer=null;musicStop();
   if(mon)mon.gain.value=Math.max(0.0001,monVol*monVol);
 }
@@ -1483,6 +1648,7 @@ $('stopBtn').onclick=()=>{stopReq=true;const nr=nativeRender();if(nr)nr.postMess
 
 /* ---------- posizione, fotogramma e comandi di trasporto ---------- */
 let playT=0,playing=false,exporting=false,runP=null;
+let preLat=0.15;try{preLat=parseFloat(localStorage.getItem('arnovideo-avvio'))||0.15;}catch(e){}   // tempo di avvio di un video, misurato
 function setT(t){const tot=totalDur();playT=Math.max(0,Math.min(tot,t||0));const sc=$('scrub');sc.max=tot;sc.value=playT;
   sc.style.setProperty('--p',(tot?playT/tot*100:0)+'%');$('clock').textContent=fmtT(playT)+' / '+fmtT(tot);if(layout.length===items.length)placeHead();}
 function locate(t){let acc=0;for(let i=0;i<items.length;i++){const d=items[i].dur;
@@ -1500,7 +1666,7 @@ function showFrame(t){setT(t);seekWant=playT;if(seekBusy)return;seekBusy=true;
 async function drawAt(t){
   if(!items.length)return blank();
   const L=locate(t),it=items[L.i];markCur(L.i);
-  const cv=$('cv'),{w,h}=outSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;fitCv();}
+  const cv=$('cv'),{w,h}=pvSize();if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;fitCv();}cvVer++;
   const x=cv.getContext('2d'),mode=$('fit').value;
   if(it.type==='img'){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,it.el,it.w,it.h,w,h,mode);return;}
   if(pv.dataset.url!==it.url){pv.src=it.url;pv.dataset.url=it.url;await once(pv,'loadedmetadata',15000);}
