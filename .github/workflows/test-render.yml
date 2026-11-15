@@ -19,6 +19,11 @@ jobs:
           swiftc -O Mac/NativeRender.swift /tmp/main.swift -o /tmp/prova
       - name: Esegui la prova
         run: /tmp/prova "$PWD/test/media" "$PWD/risultati"
+      - name: Prova tele della pagina (SecurityError)
+        run: |
+          cp test/taint/taint.swift /tmp/taintmain.swift
+          swiftc Mac/FileAccess.swift /tmp/taintmain.swift -o /tmp/taint
+          /tmp/taint "$PWD/test/taint"
       - name: Conserva i risultati
         if: always()
         uses: actions/upload-artifact@v4

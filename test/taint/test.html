@@ -1,0 +1,12 @@
+<!doctype html><html><body><script>
+const say=m=>window.webkit.messageHandlers.out.postMessage(String(m));
+(async()=>{try{
+  const r=await fetch('clip.mp4');const b=await r.blob();const u=URL.createObjectURL(b);
+  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.src=u;document.body.appendChild(v);
+  await new Promise((ok,ko)=>{v.onloadeddata=ok;v.onerror=()=>ko(new Error('video'));setTimeout(()=>ko(new Error('timeout')),15000);});
+  try{await v.play();}catch(e){} await new Promise(r=>setTimeout(r,500));v.pause();
+  const c=document.createElement('canvas');c.width=64;c.height=36;const x=c.getContext('2d');x.drawImage(v,0,0,64,36);
+  try{const d=x.getImageData(0,0,64,36).data;let mx=0;for(let i=0;i<d.length;i+=4)mx=Math.max(mx,d[i]+d[i+1]+d[i+2]);say('OK luminosita '+mx);}
+  catch(e){say('ERR '+e.name);}
+}catch(e){say('FAIL '+e.message);}})();
+</script></body></html>

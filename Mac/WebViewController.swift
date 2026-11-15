@@ -30,6 +30,10 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
             f(prefs, sel, true)
         }
 
+        // La pagina viene da un file: senza questo, le immagini dei video «sporcano» le tele (SecurityError)
+        // e la pagina non può farne miniature né leggerle.
+        FileAccess.allow(config)
+
         webView = ArnoWebView(frame: NSRect(x: 0, y: 0, width: 1180, height: 860), configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
