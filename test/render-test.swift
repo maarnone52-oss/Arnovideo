@@ -10,7 +10,7 @@ try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories
 
 func run(fill: Bool, size: CGSize, name: String) -> Bool {
     let items = [
-        RenderItem(isPhoto: false, url: media.appendingPathComponent("colori.mp4"), duration: 2, start: 2),   // tagliato: blu poi giallo
+        RenderItem(isPhoto: false, url: media.appendingPathComponent("colori.mp4"), duration: 2, start: 2, volume: 0.25),   // tagliato: blu poi giallo, volume 25%
         RenderItem(isPhoto: true, url: media.appendingPathComponent("blu.jpg"), duration: 1.5),
         RenderItem(isPhoto: false, url: media.appendingPathComponent("verde-verticale.mp4"), duration: 0),
         RenderItem(isPhoto: false, url: media.appendingPathComponent("giallo-ruotato-muto.mp4"), duration: 0),
@@ -60,8 +60,29 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
                 try? data.write(to: outDir.appendingPathComponent("\(name)-\(t).png"))
             }
         }
+        // livello audio: clip 1 (volume 25%) contro clip 3 (volume pieno)
+        let l1 = level(dest, from: 0.3, to: 1.7), l3 = level(dest, from: 3.8, to: 5.3)
+        let db = 20 * log10(max(l1, 1e-9) / max(l3, 1e-9))
+        print(String(format: "[%@] audio clip 1: %.4f · clip 3: %.4f · differenza %.1f dB (attesa circa -12)", name, l1, l3, db))
+        if abs(db + 12) > 2.5 { ok = false }
         return ok
     }
+}
+
+func level(_ url: URL, from: Double, to: Double) -> Double {
+    let asset = AVURLAsset(url: url)
+    guard let track = asset.tracks(withMediaType: .audio).first, let reader = try? AVAssetReader(asset: asset) else { return 0 }
+    reader.timeRange = CMTimeRange(start: CMTime(seconds: from, preferredTimescale: 600), end: CMTime(seconds: to, preferredTimescale: 600))
+    let out = AVAssetReaderTrackOutput(track: track, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32,
+        AVLinearPCMIsFloatKey: true, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false])
+    reader.add(out); reader.startReading()
+    var sum = 0.0, n = 0
+    while let sb = out.copyNextSampleBuffer(), let bb = CMSampleBufferGetDataBuffer(sb) {
+        var len = 0; var ptr: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+        if let p = ptr { p.withMemoryRebound(to: Float.self, capacity: len / 4) { f in for i in 0..<(len / 4) { sum += Double(f[i] * f[i]) }; n += len / 4 } }
+    }
+    return n > 0 ? (sum / Double(n)).squareRoot() : 0
 }
 
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")

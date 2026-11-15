@@ -8,6 +8,7 @@ struct RenderItem {
     let url: URL
     var duration: Double = 0  // foto: durata; video: durata del pezzo tagliato (0 = tutto il video)
     var start: Double = 0     // video: punto d'inizio nel file (taglio in testa)
+    var volume: Double = 1    // volume della clip, da 0 a 1
 }
 
 enum RenderError: LocalizedError {
@@ -71,6 +72,7 @@ final class NativeRenderer {
         var instructions: [AVMutableVideoCompositionInstruction] = []
         var cursor = CMTime.zero
         var anyAudio = false
+        var volumes: [(CMTimeRange, Float)] = []   // volume di ogni clip, per tutto il suo tratto
 
         for (index, item) in items.enumerated() {
             if cancelled { throw RenderError.cancelled }
@@ -108,6 +110,7 @@ final class NativeRenderer {
                 }
             }
 
+            volumes.append((CMTimeRange(start: cursor, duration: range.duration), Float(max(0, min(1, item.volume)))))
             let instruction = AVMutableVideoCompositionInstruction()
             instruction.timeRange = CMTimeRange(start: cursor, duration: range.duration)
             let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
@@ -134,6 +137,13 @@ final class NativeRenderer {
         export.outputFileType = .mp4
         export.videoComposition = videoComposition
         export.shouldOptimizeForNetworkUse = true
+        if anyAudio, volumes.contains(where: { $0.1 < 0.999 }) {
+            let params = AVMutableAudioMixInputParameters(track: audioTrack)
+            for (r, vol) in volumes { params.setVolumeRamp(fromStartVolume: vol, toEndVolume: vol, timeRange: r) }
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [params]
+            export.audioMix = mix
+        }
         session = export
 
         let finished = DispatchSemaphore(value: 0)
