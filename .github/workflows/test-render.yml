@@ -21,8 +21,8 @@ jobs:
         run: /tmp/prova "$PWD/test/media" "$PWD/risultati"
       - name: Prova tele della pagina (SecurityError)
         run: |
-          cp test/taint/taint.swift /tmp/taintmain.swift
-          swiftc Mac/FileAccess.swift /tmp/taintmain.swift -o /tmp/taint
+          mkdir -p /tmp/tt && cp test/taint/taint.swift /tmp/tt/main.swift
+          swiftc Mac/FileAccess.swift /tmp/tt/main.swift -o /tmp/taint
           /tmp/taint "$PWD/test/taint"
       - name: Conserva i risultati
         if: always()
