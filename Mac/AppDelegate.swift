@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             add(m, "Nuovo progetto", "new", "n")
             add(m, "Progetti recenti", "recent", "r", [.command, .shift])
             m.addItem(.separator())
-            add(m, "Aggiungi video e foto…", "open", "o")
+            add(m, "Aggiungi file multimediali…", "open", "o")
             m.addItem(.separator())
             add(m, "Esporta MP4…", "export", "e")
             m.addItem(.separator())

@@ -66,7 +66,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
-        panel.message = "Scegli uno o più video e foto"
+        panel.message = "Scegli video, foto o file audio"
         panel.allowedFileTypes = ["mp4", "m4v", "mov", "jpg", "jpeg", "png", "heic", "heif", "gif", "webp", "mp3", "m4a", "aac", "wav", "aif", "aiff", "caf"]
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] result in
             if result == .OK { self?.remember(panel.urls) }
