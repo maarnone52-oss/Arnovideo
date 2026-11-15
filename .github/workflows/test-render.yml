@@ -19,6 +19,8 @@ jobs:
           swiftc -O Mac/NativeRender.swift /tmp/main.swift -o /tmp/prova
       - name: Esegui la prova
         run: /tmp/prova "$PWD/test/media" "$PWD/risultati"
+      - name: Controllo che tutto il codice dell'app Mac si compili
+        run: swiftc -typecheck Mac/*.swift -sdk "$(xcrun --show-sdk-path)" && echo "COMPILAZIONE APP OK"
       - name: Prova tele della pagina (SecurityError)
         run: |
           mkdir -p /tmp/tt && cp test/taint/taint.swift /tmp/tt/main.swift
