@@ -231,6 +231,24 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(res.map { Self.json($0) } ?? "undefined"))")
             }
 
+        case "readconv":
+            // la pagina legge a pezzi un file convertito (solo dalla cartella «convertiti»)
+            let id = body["id"] ?? ""
+            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("ArnoVideo/convertiti", isDirectory: true).standardizedFileURL.path
+            guard let s = body["url"] as? String, let url = URL(string: s), url.isFileURL,
+                  url.standardizedFileURL.path.hasPrefix(dir),
+                  let fh = try? FileHandle(forReadingFrom: url) else {
+                js("arnoNative.reply(\(Self.json(id)),null)"); return
+            }
+            let offset = (body["offset"] as? NSNumber)?.uint64Value ?? 0
+            let length = (body["length"] as? NSNumber)?.intValue ?? 4_194_304
+            fh.seek(toFileOffset: offset)
+            let data = fh.readData(ofLength: length)
+            fh.closeFile()
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.uint64Value ?? 0
+            js("arnoNative.reply(\(Self.json(id)),{size:\(size),data:\(Self.json(data.base64EncodedString()))})")
+
         case "vconv":
             // conversione di un video in MP4 H.264 + AAC (formato unico, compatibile con l'esportazione)
             let id = body["id"] ?? ""
