@@ -99,6 +99,20 @@ if let pk = AudioPeaks.compute(url: media.appendingPathComponent("colori.mp4")),
 } else { print("PROVA FALLITA: forma d'onda non calcolata"); exit(1) }
 print("[forma d'onda] senza audio: «\(AudioPeaks.compute(url: media.appendingPathComponent("giallo-ruotato-muto.mp4")) ?? "nil")» (atteso vuoto)")
 
+// conversione MP3 → AAC
+do {
+    let sem = DispatchSemaphore(value: 0); var res: URL? = nil
+    AudioConvert.toM4A(url: media.appendingPathComponent("brano.mp3")) { res = $0; sem.signal() }
+    sem.wait()
+    if let r = res {
+        let asset = AVURLAsset(url: r), d = asset.duration.seconds
+        let codec = asset.tracks(withMediaType: .audio).first.flatMap { ($0.formatDescriptions.first).map { CMFormatDescriptionGetMediaSubType($0 as! CMFormatDescription) } } ?? 0
+        let lv = level(r, from: 0.5, to: 2.5)
+        print(String(format: "[AAC] brano.mp3 → m4a: %.2f s, codifica %@, livello %.3f", d, codec == kAudioFormatMPEG4AAC ? "AAC" : "altra", lv))
+        if abs(d - 3) > 0.15 || codec != kAudioFormatMPEG4AAC || lv < 0.05 { print("PROVA FALLITA (AAC)"); exit(1) }
+    } else { print("PROVA FALLITA: conversione AAC non riuscita"); exit(1) }
+}
+
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")
 let b = run(fill: true, size: CGSize(width: 720, height: 1280), name: "verticale-riempito")
 print(a && b ? "PROVA RIUSCITA" : "PROVA FALLITA")

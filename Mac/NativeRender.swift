@@ -341,3 +341,17 @@ enum AudioPeaks {
         return Data(peaks).base64EncodedString()
     }
 }
+
+/// Conversione di un file audio (MP3, WAV, AIFF…) in AAC .m4a con AVFoundation.
+enum AudioConvert {
+    static func toM4A(url: URL, done: @escaping (URL?) -> Void) {
+        let asset = AVURLAsset(url: url)
+        guard let ex = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { done(nil); return }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("arnovideo-aac-\(UUID().uuidString).m4a")
+        ex.outputURL = out
+        ex.outputFileType = .m4a
+        ex.exportAsynchronously {
+            done(ex.status == .completed ? out : nil)
+        }
+    }
+}

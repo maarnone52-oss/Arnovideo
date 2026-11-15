@@ -227,6 +227,18 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(res.map { Self.json($0) } ?? "undefined"))")
             }
 
+        case "aac":
+            // conversione in AAC (.m4a): il file convertito torna alla pagina
+            let id = body["id"] ?? ""
+            guard let key = body["key"] as? String, let url = fileURL(for: key) else {
+                js("arnoNative.reply(\(Self.json(id)),null)"); return
+            }
+            AudioConvert.toM4A(url: url) { [weak self] out in
+                var b64: String? = nil
+                if let out = out { b64 = (try? Data(contentsOf: out))?.base64EncodedString(); try? FileManager.default.removeItem(at: out) }
+                self?.js("arnoNative.reply(\(Self.json(id)),\(b64.map { Self.json($0) } ?? "null"))")
+            }
+
         case "cancel":
             renderer?.cancel()
 
