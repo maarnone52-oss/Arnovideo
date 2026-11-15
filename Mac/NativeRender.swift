@@ -355,3 +355,33 @@ enum AudioConvert {
         }
     }
 }
+
+/// Conversione di un video in MP4 (H.264 fino a 1920×1080, audio AAC): un formato unico che il Mac esporta sempre.
+enum VideoConvert {
+    static func toMP4(url: URL, name: String, progress: @escaping (Double) -> Void, done: @escaping (URL?, String?) -> Void) {
+        let asset = AVURLAsset(url: url)
+        let preset = AVAssetExportPreset1920x1080
+        guard let ex = AVAssetExportSession(asset: asset, presetName: preset) else { done(nil, "il Mac non sa convertire questo video"); return }
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ArnoVideo/convertiti", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let safe = name.replacingOccurrences(of: "/", with: "-")
+        var out = dir.appendingPathComponent(safe + ".mp4")
+        var n = 2
+        while FileManager.default.fileExists(atPath: out.path) { out = dir.appendingPathComponent("\(safe)-\(n).mp4"); n += 1 }
+        ex.outputURL = out
+        ex.outputFileType = .mp4
+        ex.shouldOptimizeForNetworkUse = true
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
+        timer.setEventHandler { progress(Double(ex.progress)) }
+        timer.resume()
+        ex.exportAsynchronously {
+            DispatchQueue.main.async {
+                timer.cancel()
+                if ex.status == .completed { done(out, nil) }
+                else { done(nil, ex.error?.localizedDescription ?? "conversione non riuscita") }
+            }
+        }
+    }
+}

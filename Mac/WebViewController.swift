@@ -231,6 +231,25 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(res.map { Self.json($0) } ?? "undefined"))")
             }
 
+        case "vconv":
+            // conversione di un video in MP4 H.264 + AAC (formato unico, compatibile con l'esportazione)
+            let id = body["id"] ?? ""
+            guard let key = body["key"] as? String, let url = fileURL(for: key) else {
+                js("arnoNative.reply(\(Self.json(id)),{error:'file non trovato'})"); return
+            }
+            let name = (body["name"] as? String) ?? url.deletingPathExtension().lastPathComponent
+            VideoConvert.toMP4(url: url, name: name, progress: { [weak self] p in
+                self?.js("arnoNative.vprog(\(Self.json(id)),\(p))")
+            }) { [weak self] out, err in
+                guard let self = self else { return }
+                if let out = out {
+                    self.remember([out])
+                    self.js("arnoNative.reply(\(Self.json(id)),{url:\(Self.json(out.absoluteString))})")
+                } else {
+                    self.js("arnoNative.reply(\(Self.json(id)),{error:\(Self.json(err ?? "conversione non riuscita"))})")
+                }
+            }
+
         case "aac":
             // conversione in AAC (.m4a): il file convertito torna alla pagina
             let id = body["id"] ?? ""
