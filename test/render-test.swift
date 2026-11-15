@@ -85,6 +85,14 @@ func level(_ url: URL, from: Double, to: Double) -> Double {
     return n > 0 ? (sum / Double(n)).squareRoot() : 0
 }
 
+// forma d'onda
+if let pk = AudioPeaks.compute(url: media.appendingPathComponent("colori.mp4")), let d = Data(base64Encoded: pk) {
+    let avg = d.reduce(0) { $0 + Int($1) } / max(1, d.count)
+    print("[forma d'onda] colori.mp4: \(d.count) valori (attesi circa 500), media \(avg)")
+    if d.count < 480 || d.count > 520 || avg < 10 { print("PROVA FALLITA (forma d'onda)"); exit(1) }
+} else { print("PROVA FALLITA: forma d'onda non calcolata"); exit(1) }
+print("[forma d'onda] senza audio: «\(AudioPeaks.compute(url: media.appendingPathComponent("giallo-ruotato-muto.mp4")) ?? "nil")» (atteso vuoto)")
+
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")
 let b = run(fill: true, size: CGSize(width: 720, height: 1280), name: "verticale-riempito")
 print(a && b ? "PROVA RIUSCITA" : "PROVA FALLITA")

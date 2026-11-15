@@ -247,3 +247,47 @@ final class NativeRenderer {
         }
     }
 }
+
+// MARK: - Forma d'onda per la timeline
+
+enum AudioPeaks {
+    /// Picchi dell'audio (0-255) ogni 1/rate di secondo, in base64. "" se il file non ha audio, nil se non leggibile.
+    static func compute(url: URL, rate: Int = 100) -> String? {
+        let asset = AVURLAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .audio).first else { return "" }
+        guard let reader = try? AVAssetReader(asset: asset) else { return nil }
+        let sampleRate = 8000.0                       // basta per i picchi, e legge molto più in fretta
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false,
+            AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1])
+        out.alwaysCopiesSampleData = false
+        guard reader.canAdd(out) else { return nil }
+        reader.add(out)
+        guard reader.startReading() else { return nil }
+        let per = Int(sampleRate) / rate
+        var peaks: [UInt8] = []
+        peaks.reserveCapacity(Int(asset.duration.seconds * Double(rate)) + 10)
+        var count = 0, maxv: Int32 = 0
+        while let sb = out.copyNextSampleBuffer(), let bb = CMSampleBufferGetDataBuffer(sb) {
+            var len = 0
+            var ptr: UnsafeMutablePointer<Int8>?
+            guard CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr) == kCMBlockBufferNoErr,
+                  let p = ptr else { continue }
+            p.withMemoryRebound(to: Int16.self, capacity: len / 2) { s in
+                for i in 0..<(len / 2) {
+                    let v = abs(Int32(s[i]))
+                    if v > maxv { maxv = v }
+                    count += 1
+                    if count == per {
+                        peaks.append(UInt8(min(255, Int(maxv) * 255 / 32767)))
+                        count = 0; maxv = 0
+                    }
+                }
+            }
+        }
+        if count > 0 { peaks.append(UInt8(min(255, Int(maxv) * 255 / 32767))) }
+        if reader.status == .failed { return nil }
+        return Data(peaks).base64EncodedString()
+    }
+}

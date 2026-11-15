@@ -205,6 +205,18 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(Self.json(list)))")
             }
 
+        case "peaks":
+            // forma d'onda della traccia audio, calcolata dal Mac
+            let id = body["id"] ?? ""
+            let rate = (body["rate"] as? NSNumber)?.intValue ?? 100
+            guard let key = body["key"] as? String, let url = fileURL(for: key) else {
+                js("arnoNative.reply(\(Self.json(id)),undefined)"); return
+            }
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let res = AudioPeaks.compute(url: url, rate: rate)
+                self?.js("arnoNative.reply(\(Self.json(id)),\(res.map { Self.json($0) } ?? "undefined"))")
+            }
+
         case "cancel":
             renderer?.cancel()
 
