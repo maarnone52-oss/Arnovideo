@@ -12,7 +12,7 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
     let items = [
         RenderItem(isPhoto: false, url: media.appendingPathComponent("colori.mp4"), duration: 2, start: 2, volume: 0.25),   // tagliato: blu poi giallo, volume 25%
         RenderItem(isPhoto: true, url: media.appendingPathComponent("blu.jpg"), duration: 1.5),
-        RenderItem(isPhoto: false, url: media.appendingPathComponent("verde-verticale.mp4"), duration: 0),
+        RenderItem(isPhoto: false, url: media.appendingPathComponent("verde-verticale.mp4"), duration: 0, audioIn: 0.5, audioOut: 0.3),   // audio tagliato: muto 3.5–4.0 e 5.2–5.5
         RenderItem(isPhoto: false, url: media.appendingPathComponent("giallo-ruotato-muto.mp4"), duration: 0),
     ]
     let renderer = NativeRenderer()
@@ -61,10 +61,13 @@ func run(fill: Bool, size: CGSize, name: String) -> Bool {
             }
         }
         // livello audio: clip 1 (volume 25%) contro clip 3 (volume pieno)
-        let l1 = level(dest, from: 0.3, to: 1.7), l3 = level(dest, from: 3.8, to: 5.3)
+        let l1 = level(dest, from: 0.3, to: 1.7), l3 = level(dest, from: 4.1, to: 5.1)
         let db = 20 * log10(max(l1, 1e-9) / max(l3, 1e-9))
         print(String(format: "[%@] audio clip 1: %.4f · clip 3: %.4f · differenza %.1f dB (attesa circa -12)", name, l1, l3, db))
         if abs(db + 12) > 2.5 { ok = false }
+        let mh = level(dest, from: 3.6, to: 3.95), mt = level(dest, from: 5.25, to: 5.45)
+        print(String(format: "[%@] audio tagliato in testa: %.4f · in coda: %.4f (attesi quasi 0)", name, mh, mt))
+        if mh > l3 * 0.1 || mt > l3 * 0.1 { ok = false }
         let lm = level(dest, from: 2.2, to: 3.3)          // durante la foto c'è solo la musica
         print(String(format: "[%@] musica sopra la foto: %.4f (attesa sopra 0.02)", name, lm))
         if lm < 0.02 { ok = false }

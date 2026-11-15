@@ -9,6 +9,8 @@ struct RenderItem {
     var duration: Double = 0  // foto: durata; video: durata del pezzo tagliato (0 = tutto il video)
     var start: Double = 0     // video: punto d'inizio nel file (taglio in testa)
     var volume: Double = 1    // volume della clip, da 0 a 1
+    var audioIn: Double = 0   // audio muto per i primi secondi della clip (taglio audio in testa)
+    var audioOut: Double = 0  // audio muto per gli ultimi secondi della clip (taglio audio in coda)
 }
 
 /// Un pezzo della traccia musicale.
@@ -119,7 +121,15 @@ final class NativeRenderer {
                 }
             }
 
-            volumes.append((CMTimeRange(start: cursor, duration: range.duration), Float(max(0, min(1, item.volume)))))
+            do {   // volume della clip, muto nelle parti tagliate dell'audio
+                let total = range.duration.seconds, vol = Float(max(0, min(1, item.volume)))
+                let ain = max(0, min(item.audioIn, total)), aout = max(0, min(item.audioOut, total - ain))
+                func seg(_ a: Double, _ b: Double, _ v: Float) {
+                    if b - a > 0.0005 { volumes.append((CMTimeRange(start: cursor + CMTime(seconds: a, preferredTimescale: 600), duration: CMTime(seconds: b - a, preferredTimescale: 600)), v)) }
+                }
+                if ain == 0 && aout == 0 { volumes.append((CMTimeRange(start: cursor, duration: range.duration), vol)) }
+                else { seg(0, ain, 0); seg(ain, total - aout, vol); seg(total - aout, total, 0) }
+            }
             let instruction = AVMutableVideoCompositionInstruction()
             instruction.timeRange = CMTimeRange(start: cursor, duration: range.duration)
             let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
