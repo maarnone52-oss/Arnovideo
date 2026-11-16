@@ -144,10 +144,10 @@ func audioRun(_ item: RenderItem, _ name: String) -> URL? {
 let rosso = media.appendingPathComponent("rosso.mp4")
 if let u1 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 1), "vol100"),
    let u2 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 2), "vol200"),
-   let u3 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 1, fadeIn: 1, fadeOut: 1), "dissolvenze") {
+   let u3 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 1, fadeIn: 0.6, fadeOut: 0.6), "dissolvenze") {
     let d = AVURLAsset(url: u1).duration.seconds
     let l1 = level(u1, from: 0.8, to: d - 0.8), l2 = level(u2, from: 0.8, to: d - 0.8)
-    let fi = level(u3, from: 0.05, to: 0.25), mid = level(u3, from: 1.2, to: d - 1.2), fo = level(u3, from: d - 0.25, to: d - 0.05)
+    let fi = level(u3, from: 0.05, to: 0.25), mid = level(u3, from: 0.75, to: d - 0.75), fo = level(u3, from: d - 0.25, to: d - 0.05)
     print(String(format: "[VOL] 100%%: %.4f · 200%%: %.4f (rapporto %.2f, atteso circa 2)", l1, l2, l2 / max(l1, 1e-6)))
     print(String(format: "[FADE] inizio %.4f · centro %.4f · fine %.4f (attesi bassi all'inizio e alla fine)", fi, mid, fo))
     if fi > mid * 0.4 || fo > mid * 0.4 { print("PROVA FALLITA (dissolvenze)"); exit(1) }
