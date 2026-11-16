@@ -133,6 +133,26 @@ do {
     } else { print("PROVA FALLITA: conversione AAC non riuscita"); exit(1) }
 }
 
+// volume oltre il 100% e dissolvenze (rosso.mp4 ha un tono continuo)
+func audioRun(_ item: RenderItem, _ name: String) -> URL? {
+    let r = NativeRenderer(); let sem = DispatchSemaphore(value: 0); var res: Result<URL, Error>!
+    r.render(items: [item], music: [], size: CGSize(width: 640, height: 360), fill: false, progress: { _ in }, done: { res = $0; sem.signal() })
+    sem.wait()
+    guard case .success(let u) = res! else { return nil }
+    let dest = outDir.appendingPathComponent(name + ".mp4"); try? FileManager.default.removeItem(at: dest); try? FileManager.default.copyItem(at: u, to: dest); r.cleanUp(); return dest
+}
+let rosso = media.appendingPathComponent("rosso.mp4")
+if let u1 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 1), "vol100"),
+   let u2 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 2), "vol200"),
+   let u3 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume: 1, fadeIn: 1, fadeOut: 1), "dissolvenze") {
+    let d = AVURLAsset(url: u1).duration.seconds
+    let l1 = level(u1, from: 0.8, to: d - 0.8), l2 = level(u2, from: 0.8, to: d - 0.8)
+    let fi = level(u3, from: 0.05, to: 0.25), mid = level(u3, from: 1.2, to: d - 1.2), fo = level(u3, from: d - 0.25, to: d - 0.05)
+    print(String(format: "[VOL] 100%%: %.4f · 200%%: %.4f (rapporto %.2f, atteso circa 2)", l1, l2, l2 / max(l1, 1e-6)))
+    print(String(format: "[FADE] inizio %.4f · centro %.4f · fine %.4f (attesi bassi all'inizio e alla fine)", fi, mid, fo))
+    if fi > mid * 0.4 || fo > mid * 0.4 { print("PROVA FALLITA (dissolvenze)"); exit(1) }
+} else { print("PROVA FALLITA (volume/dissolvenze)"); exit(1) }
+
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")
 let b = run(fill: true, size: CGSize(width: 720, height: 1280), name: "verticale-riempito")
 musicFile = "brano.mp3"
