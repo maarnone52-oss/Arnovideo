@@ -286,6 +286,15 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                 self?.js("arnoNative.reply(\(Self.json(id)),\(b64.map { Self.json($0) } ?? "null"))")
             }
 
+        case "delconv":
+            // cancella una copia convertita già passata alla pagina (solo nella cartella delle conversioni dell'app)
+            if let str = body["url"] as? String, let u = URL(string: str), u.isFileURL {
+                let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("ArnoVideo/convertiti", isDirectory: true).standardizedFileURL.path
+                let path = u.standardizedFileURL.path
+                if path.hasPrefix(dir + "/") { try? FileManager.default.removeItem(atPath: path) }
+            }
+
         case "cancel":
             renderer?.cancel()
 

@@ -4,7 +4,7 @@ name: App Mac
 
 on:
   push:
-    branches: [main]
+    branches: [main, prova-mac]
     paths: ['Web/**', 'Mac/**', 'project.yml', '.github/workflows/mac.yml']
   workflow_dispatch:
 
@@ -69,7 +69,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view mac-${VER} >/dev/null 2>&1 || gh release create mac-${VER} --target main --title "x" --notes "x"
-          gh release upload mac-${VER} ArnoCut-Mac-${VER}.zip ArnoCut-${VER}-Catalina.dmg ArnoCut-${VER}-Catalina.pkg --clobber
-          gh release edit mac-${VER} --title "ARNOCUT per Mac ${VER} (Catalina e successivi)" \
+          gh release view prova-mac-${VER} >/dev/null 2>&1 || gh release create prova-mac-${VER} --target prova-mac --prerelease --title "x" --notes "x"
+          gh release upload prova-mac-${VER} ArnoCut-Mac-${VER}.zip ArnoCut-${VER}-Catalina.dmg ArnoCut-${VER}-Catalina.pkg --clobber
+          gh release edit prova-mac-${VER} --prerelease --title "PROVA · ARNOCUT per Mac ${VER} (non definitiva)" \
             --notes "App per macOS 10.15 Catalina e successivi (Intel e chip Apple). Installazione: ArnoCut-${VER}-Catalina.pkg (doppio clic, si installa da solo in Applicazioni) oppure ArnoCut-${VER}-Catalina.dmg (trascina l'app in Applicazioni). Sostituisce ARNOVIDEO/ARNOCUT già installato e ne conserva i progetti (la vecchia app ArnoVideo si può cestinare). La prima volta: clic destro sull'app > Apri."
