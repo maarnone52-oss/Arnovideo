@@ -1,7 +1,7 @@
 import Cocoa
 import WebKit
 
-/// Finestra principale di ARNOVIDEO per Mac e menu a tendina.
+/// Finestra principale di ARNOCUT per Mac e menu a tendina.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private let controller = WebViewController()
@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 860),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "ARNOVIDEO"
+        window.title = "ARNOCUT"
         NSWindow.allowsAutomaticWindowTabbing = false
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 640, height: 520)
@@ -60,13 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let left = key(NSLeftArrowFunctionKey), right = key(NSRightArrowFunctionKey)
 
-        _ = top(main, "ARNOVIDEO") { m in
-            m.addItem(withTitle: "Informazioni su ARNOVIDEO",
+        _ = top(main, "ARNOCUT") { m in
+            m.addItem(withTitle: "Informazioni su ARNOCUT",
                       action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
             m.addItem(.separator())
-            m.addItem(withTitle: "Nascondi ARNOVIDEO", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+            m.addItem(withTitle: "Nascondi ARNOCUT", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
             m.addItem(.separator())
-            m.addItem(withTitle: "Esci da ARNOVIDEO", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            m.addItem(withTitle: "Esci da ARNOCUT", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         }
 
         _ = top(main, "File") { m in

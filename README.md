@@ -1,4 +1,4 @@
-# ARNOVIDEO
+# ARNOCUT (ex ARNOVIDEO)
 
 - **Pagina web installabile (iPhone, iPad, Mac):** https://maarnone52-oss.github.io/Arnovideo/
 - **App per Mac Catalina e successivi:** pagina [Releases](https://github.com/maarnone52-oss/Arnovideo/releases) → `ArnoVideo-VERSIONE-Catalina.pkg` oppure `.dmg`

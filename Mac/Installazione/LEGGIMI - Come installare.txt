@@ -1,10 +1,10 @@
-ARNOVIDEO per Mac (macOS 10.15 Catalina e successivi)
+ARNOCUT per Mac (macOS 10.15 Catalina e successivi)
 =====================================================
 
-ARNOVIDEO mette in sequenza video e foto su una timeline ed esporta un
+ARNOCUT mette in sequenza video e foto su una timeline ed esporta un
 unico video MP4.
 Funziona su macOS 10.15 Catalina e successivi, Mac Intel e chip Apple.
-Su High Sierra e Mojave usa invece "ARNOVIDEO Chrome".
+Su High Sierra e Mojave usa invece "ARNOVIDEO Chrome" (la versione di ARNOCUT per Chrome).
 
 
 PRIMA DI TUTTO (solo Catalina)
@@ -17,11 +17,11 @@ funzionare.
 
 INSTALLAZIONE
 -------------
-1. In questa finestra trascina l'icona ArnoVideo sulla cartella
+1. In questa finestra trascina l'icona ArnoCut sulla cartella
    "Applicazioni" che vedi accanto.
    Se il Mac chiede di sostituire una versione già presente, scegli
    "Sostituisci": i progetti restano.
-2. Chiudi questa finestra ed espelli il disco "ArnoVideo"
+2. Chiudi questa finestra ed espelli il disco "ArnoCut"
    (clic destro sull'icona del disco > Espelli).
 
 
@@ -32,7 +32,7 @@ Si sblocca una volta sola:
 
 - da Catalina fino a Sonoma:
   apri la cartella Applicazioni, clic destro (o Ctrl+clic) su
-  ArnoVideo > Apri > Apri.
+  ArnoCut > Apri > Apri.
 
 - macOS Sequoia o più recente:
   fai doppio clic sull'app e chiudi l'avviso, poi vai in
@@ -58,7 +58,7 @@ AGGIORNARE O DISINSTALLARE
 --------------------------
 - Per aggiornare: scarica il nuovo file e ripeti l'installazione,
   scegliendo "Sostituisci".
-- Per disinstallare: trascina ArnoVideo dalla cartella Applicazioni
+- Per disinstallare: trascina ArnoCut dalla cartella Applicazioni
   nel Cestino.
 
 (c) 2026 Maurizio Arnone

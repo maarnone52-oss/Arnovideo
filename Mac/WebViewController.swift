@@ -2,7 +2,7 @@ import Cocoa
 import WebKit
 import AVFoundation
 
-/// Mostra ARNOVIDEO (Web/index.html): sceglie video e foto con il pannello del Finder
+/// Mostra ARNOCUT (Web/index.html): sceglie video e foto con il pannello del Finder
 /// e salva il video esportato con la finestra "Salva con nome".
 final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
@@ -196,7 +196,7 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                                        duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 0,
                                        volume: (entry["vol"] as? NSNumber)?.doubleValue ?? 1))
             }
-            let name = (body["name"] as? String) ?? "ArnoVideo.mp4"
+            let name = (body["name"] as? String) ?? "ArnoCut.mp4"
             let renderer = NativeRenderer()
             self.renderer = renderer
             var lastSent = -1

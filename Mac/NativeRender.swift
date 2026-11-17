@@ -177,7 +177,7 @@ final class NativeRenderer {
         videoComposition.instructions = instructions
 
         // esportazione MP4 (H.264 + AAC)
-        let out = workDir.appendingPathComponent("ArnoVideo.mp4")
+        let out = workDir.appendingPathComponent("ArnoCut.mp4")
         guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
             throw RenderError.message("Il Mac non riesce a esportare il video.")
         }

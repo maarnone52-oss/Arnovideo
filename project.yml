@@ -8,8 +8,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "1.40.3"
-    CURRENT_PROJECT_VERSION: "58"
+    MARKETING_VERSION: "1.41.0"
+    CURRENT_PROJECT_VERSION: "59"
     SWIFT_VERSION: "5.0"
 targets:
   ArnoVideo:
@@ -23,7 +23,7 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        CFBundleDisplayName: ArnoVideo
+        CFBundleDisplayName: ArnoCut
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
@@ -44,9 +44,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
-        NSPhotoLibraryAddUsageDescription: "ARNOVIDEO salva nella galleria il video che hai creato."
-        NSPhotoLibraryUsageDescription: "ARNOVIDEO legge i video e le foto che scegli per metterli nella timeline."
-        NSCameraUsageDescription: "ARNOVIDEO può usare la fotocamera per aggiungere un video o una foto alla timeline."
+        NSPhotoLibraryAddUsageDescription: "ARNOCUT salva nella galleria il video che hai creato."
+        NSPhotoLibraryUsageDescription: "ARNOCUT legge i video e le foto che scegli per metterli nella timeline."
+        NSCameraUsageDescription: "ARNOCUT può usare la fotocamera per aggiungere un video o una foto alla timeline."
         NSHumanReadableCopyright: "© 2026 Maurizio Arnone"
     settings:
       base:
@@ -69,8 +69,8 @@ targets:
     info:
       path: Mac/Info.plist
       properties:
-        CFBundleName: ArnoVideo
-        CFBundleDisplayName: ArnoVideo
+        CFBundleName: ArnoCut
+        CFBundleDisplayName: ArnoCut
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
@@ -80,7 +80,7 @@ targets:
         NSHighResolutionCapable: true
     settings:
       base:
-        PRODUCT_NAME: ArnoVideo
+        PRODUCT_NAME: ArnoCut
         PRODUCT_BUNDLE_IDENTIFIER: it.arnone.arnovideo.mac
         MACOSX_DEPLOYMENT_TARGET: "10.15"
         ARCHS: "arm64 x86_64"
