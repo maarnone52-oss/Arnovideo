@@ -8,8 +8,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "1.42.6"
-    CURRENT_PROJECT_VERSION: "61"
+    MARKETING_VERSION: "1.42.7"
+    CURRENT_PROJECT_VERSION: "62"
     SWIFT_VERSION: "5.0"
 targets:
   ArnoVideo:
