@@ -13,6 +13,7 @@ struct RenderItem {
     var audioOut: Double = 0  // audio muto per gli ultimi secondi della clip (taglio audio in coda)
     var fadeIn: Double = 0    // dissolvenza audio in entrata (secondi)
     var fadeOut: Double = 0   // dissolvenza audio in uscita (secondi)
+    var crossfade: Double = 0 // sovrapposizione con la clip precedente = dissolvenza video e audio (secondi)
 }
 
 /// Un pezzo della traccia musicale.
@@ -82,15 +83,12 @@ final class NativeRenderer {
                                                            preferredTrackID: kCMPersistentTrackID_Invalid)
         else { throw RenderError.message("Il Mac non riesce a preparare il video.") }
 
-        var instructions: [AVMutableVideoCompositionInstruction] = []
-        var cursor = CMTime.zero
-        var anyAudio = false
-        var volumes: [(CMTimeRange, Float, Float)] = []   // volume di ogni clip, per tutto il suo tratto
-
+        // 1) carica i pezzi
+        struct Piece { let asset: AVURLAsset; let source: AVAssetTrack; let range: CMTimeRange; let item: RenderItem; var xf: Double = 0 }
+        var pieces: [Piece] = []
         for (index, item) in items.enumerated() {
             if cancelled { throw RenderError.cancelled }
             progress(0.15 * Double(index) / Double(items.count))
-
             let asset: AVURLAsset
             if item.isPhoto {
                 let clip = workDir.appendingPathComponent("foto-\(index).mp4")
@@ -110,44 +108,109 @@ final class NativeRenderer {
                 range = CMTimeRange(start: s, duration: d).intersection(source.timeRange)
             }
             guard range.duration.seconds > 0 else { continue }
-            try videoTrack.insertTimeRange(range, of: source, at: cursor)
+            pieces.append(Piece(asset: asset, source: source, range: range, item: item))
+        }
+        guard !pieces.isEmpty else { throw RenderError.message("Nessun elemento utilizzabile nella timeline.") }
+        // 2) dissolvenze: la clip si sovrappone alla precedente (mai oltre la parte libera della precedente)
+        for i in 1..<max(1, pieces.count) {
+            let prev = pieces[i - 1].range.duration.seconds - pieces[i - 1].xf
+            let limit = min(prev, pieces[i].range.duration.seconds) - 0.05
+            pieces[i].xf = max(0, min(pieces[i].item.crossfade, limit))
+        }
+        let useAB = pieces.contains { $0.xf > 0.001 }   // con dissolvenze: due tracce alternate (A/B)
+        var vTracks = [videoTrack], aTracks = [audioTrack]
+        if useAB {
+            guard let v2 = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+                  let a2 = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            else { throw RenderError.message("Il Mac non riesce a preparare le dissolvenze.") }
+            vTracks.append(v2); aTracks.append(a2)
+        }
+        func sec(_ v: Double) -> CMTime { CMTime(seconds: v, preferredTimescale: 600) }
+
+        // 3) mette i pezzi nelle tracce
+        var instructions: [AVMutableVideoCompositionInstruction] = []
+        var anyAudio = [false, false]
+        var volumes: [[(CMTimeRange, Float, Float)]] = [[], []]   // volume di ogni clip, per traccia audio
+        var starts: [CMTime] = [], transforms: [CGAffineTransform] = []
+        var cursor = CMTime.zero   // fine della clip precedente
+        for (i, p) in pieces.enumerated() {
+            let k = useAB ? i % 2 : 0
+            let at = i == 0 ? CMTime.zero : cursor - sec(p.xf)
+            alignAudio(vTracks[k], to: at)
+            try vTracks[k].insertTimeRange(p.range, of: p.source, at: at)
+            starts.append(at)
+            transforms.append(p.item.isPhoto ? .identity : fitTransform(p.source, size: size, fill: fill))
 
             // audio: quello del video, oppure silenzio
-            if let sourceAudio = asset.tracks(withMediaType: .audio).first {
-                let audioRange = sourceAudio.timeRange.intersection(range)
+            if let sourceAudio = p.asset.tracks(withMediaType: .audio).first {
+                let audioRange = sourceAudio.timeRange.intersection(p.range)
                 if audioRange.duration.seconds > 0 {
-                    let at = cursor + (audioRange.start - range.start)
-                    alignAudio(audioTrack, to: at)
-                    try audioTrack.insertTimeRange(audioRange, of: sourceAudio, at: at)
-                    anyAudio = true
+                    let aat = at + (audioRange.start - p.range.start)
+                    alignAudio(aTracks[k], to: aat)
+                    try aTracks[k].insertTimeRange(audioRange, of: sourceAudio, at: aat)
+                    anyAudio[k] = true
                 }
             }
 
-            do {   // volume della clip, muto nelle parti tagliate dell'audio, dissolvenze in entrata e in uscita
-                let total = range.duration.seconds, vol = Float(max(0, min(4, item.volume)))
+            do {   // volume della clip, muto nelle parti tagliate dell'audio, dissolvenze in entrata e in uscita, dissolvenza incrociata
+                let item = p.item
+                let total = p.range.duration.seconds, vol = Float(max(0, min(4, item.volume)))
                 let ain = max(0, min(item.audioIn, total)), aout = max(0, min(item.audioOut, total - ain))
                 let a = ain, b = total - aout
                 let fin = max(0, min(item.fadeIn, b - a)), fout = max(0, min(item.fadeOut, b - a - fin))
-                func seg(_ s: Double, _ e: Double, _ v0: Float, _ v1: Float) {
-                    if e - s > 0.0005 { volumes.append((CMTimeRange(start: cursor + CMTime(seconds: s, preferredTimescale: 600), duration: CMTime(seconds: e - s, preferredTimescale: 600)), v0, v1)) }
+                let xi = p.xf, xo = i + 1 < pieces.count ? pieces[i + 1].xf : 0
+                func env(_ t: Double) -> Float {
+                    var f: Double
+                    if t < a || t > b { f = 0 }
+                    else if fin > 0 && t < a + fin { f = (t - a) / fin }
+                    else if fout > 0 && t > b - fout { f = (b - t) / fout }
+                    else { f = 1 }
+                    if xi > 0 && t < xi { f *= max(0, t / xi) }
+                    if xo > 0 && t > total - xo { f *= max(0, (total - t) / xo) }
+                    return Float(max(0, f)) * vol
                 }
-                seg(0, a, 0, 0)
-                seg(a, a + fin, 0, vol)
-                seg(a + fin, b - fout, vol, vol)
-                seg(b - fout, b, vol, 0)
-                seg(b, total, 0, 0)
+                var marks: [Double] = [0, a, a + fin, b - fout, b, total]
+                for n in 1...8 { if xi > 0 { marks.append(xi * Double(n) / 8) }; if xo > 0 { marks.append(total - xo + xo * Double(n) / 8) } }
+                let pts = Array(Set(marks.map { max(0, min(total, ($0 * 1000).rounded() / 1000)) })).sorted()
+                for j in 0..<max(0, pts.count - 1) {
+                    let s0 = pts[j], e0 = pts[j + 1]
+                    if e0 - s0 > 0.0005 {
+                        volumes[k].append((CMTimeRange(start: at + sec(s0), duration: sec(e0 - s0)), env(s0 + 1e-6), env(e0 - 1e-6)))
+                    }
+                }
             }
-            let instruction = AVMutableVideoCompositionInstruction()
-            instruction.timeRange = CMTimeRange(start: cursor, duration: range.duration)
-            let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-            layer.setTransform(item.isPhoto ? .identity : fitTransform(source, size: size, fill: fill), at: cursor)
-            instruction.layerInstructions = [layer]
-            instructions.append(instruction)
+            cursor = at + p.range.duration
+        }
 
-            cursor = cursor + range.duration
+        // 4) istruzioni video: tratti con una sola clip, e tratti di dissolvenza con due
+        for (i, p) in pieces.enumerated() {
+            let k = useAB ? i % 2 : 0
+            let xi = p.xf, xo = i + 1 < pieces.count ? pieces[i + 1].xf : 0
+            if xi > 0 {
+                let r = CMTimeRange(start: starts[i], duration: sec(xi))
+                let ins = AVMutableVideoCompositionInstruction(); ins.timeRange = r
+                let outL = AVMutableVideoCompositionLayerInstruction(assetTrack: vTracks[1 - k])
+                outL.setTransform(transforms[i - 1], at: r.start)
+                outL.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: r)
+                let inL = AVMutableVideoCompositionLayerInstruction(assetTrack: vTracks[k])
+                inL.setTransform(transforms[i], at: r.start)
+                ins.layerInstructions = [outL, inL]   // la clip che esce sta sopra e sfuma
+                instructions.append(ins)
+            }
+            let s0 = starts[i] + sec(xi), e0 = starts[i] + p.range.duration - sec(xo)
+            if e0 > s0 {
+                let ins = AVMutableVideoCompositionInstruction(); ins.timeRange = CMTimeRange(start: s0, end: e0)
+                let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: vTracks[k])
+                layer.setTransform(transforms[i], at: s0)
+                if useAB { layer.setOpacity(1, at: s0) }
+                ins.layerInstructions = [layer]
+                instructions.append(ins)
+            }
         }
         guard !instructions.isEmpty else { throw RenderError.message("Nessun elemento utilizzabile nella timeline.") }
-        if anyAudio { alignAudio(audioTrack, to: cursor) } else { composition.removeTrack(audioTrack) }
+        for k in 0..<aTracks.count {
+            if anyAudio[k] { alignAudio(aTracks[k], to: cursor) } else { composition.removeTrack(aTracks[k]) }
+        }
 
         // traccia musicale: una seconda traccia audio, ogni pezzo dal suo punto di partenza
         var musicVolumes: [(CMTimeRange, Float)] = []
@@ -186,9 +249,9 @@ final class NativeRenderer {
         export.videoComposition = videoComposition
         export.shouldOptimizeForNetworkUse = true
         var mixParams: [AVMutableAudioMixInputParameters] = []
-        if anyAudio, volumes.contains(where: { abs($0.1 - 1) > 0.001 || abs($0.2 - 1) > 0.001 }) {
-            let params = AVMutableAudioMixInputParameters(track: audioTrack)
-            for (r, v0, v1) in volumes { params.setVolumeRamp(fromStartVolume: v0, toEndVolume: v1, timeRange: r) }
+        for k in 0..<aTracks.count where anyAudio[k] && volumes[k].contains(where: { abs($0.1 - 1) > 0.001 || abs($0.2 - 1) > 0.001 }) {
+            let params = AVMutableAudioMixInputParameters(track: aTracks[k])
+            for (r, v0, v1) in volumes[k] { params.setVolumeRamp(fromStartVolume: v0, toEndVolume: v1, timeRange: r) }
             mixParams.append(params)
         }
         if let mt = musicTrack, musicVolumes.contains(where: { $0.1 < 0.999 }) {

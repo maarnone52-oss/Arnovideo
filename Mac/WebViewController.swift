@@ -184,7 +184,8 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                                         audioIn: (entry["ain"] as? NSNumber)?.doubleValue ?? 0,
                                         audioOut: (entry["aout"] as? NSNumber)?.doubleValue ?? 0,
                                         fadeIn: (entry["fin"] as? NSNumber)?.doubleValue ?? 0,
-                                        fadeOut: (entry["fout"] as? NSNumber)?.doubleValue ?? 0))
+                                        fadeOut: (entry["fout"] as? NSNumber)?.doubleValue ?? 0,
+                                        crossfade: (entry["xf"] as? NSNumber)?.doubleValue ?? 0))
             }
             let w = max(2, ((body["w"] as? NSNumber)?.intValue ?? 1920) / 2 * 2)
             let h = max(2, ((body["h"] as? NSNumber)?.intValue ?? 1080) / 2 * 2)

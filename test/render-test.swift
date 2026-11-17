@@ -153,6 +153,44 @@ if let u1 = audioRun(RenderItem(isPhoto: false, url: rosso, duration: 0, volume:
     if fi > mid * 0.4 || fo > mid * 0.4 { print("PROVA FALLITA (dissolvenze)"); exit(1) }
 } else { print("PROVA FALLITA (volume/dissolvenze)"); exit(1) }
 
+// dissolvenze video tra le clip: rosso (2 s) → foto blu (2 s, sovrapposta 1 s) → verde (2 s, sovrapposto 0,5 s) = 4,5 s
+do {
+    let items = [
+        RenderItem(isPhoto: false, url: rosso, duration: 0),
+        RenderItem(isPhoto: true, url: media.appendingPathComponent("blu.jpg"), duration: 2, crossfade: 1.0),
+        RenderItem(isPhoto: false, url: media.appendingPathComponent("verde-verticale.mp4"), duration: 0, crossfade: 0.5),
+    ]
+    let r = NativeRenderer(); let sem = DispatchSemaphore(value: 0); var res: Result<URL, Error>!
+    r.render(items: items, music: [], size: CGSize(width: 640, height: 360), fill: true, progress: { _ in }, done: { res = $0; sem.signal() })
+    sem.wait()
+    guard case .success(let u) = res! else { print("PROVA FALLITA (dissolvenze video): \(res!)"); exit(1) }
+    let dest = outDir.appendingPathComponent("dissolvenze-video.mp4"); try? FileManager.default.removeItem(at: dest); try! FileManager.default.copyItem(at: u, to: dest); r.cleanUp()
+    let asset = AVURLAsset(url: dest)
+    print(String(format: "[XF] durata %.2f s (attesa 4.50) · tracce video %d · tracce audio %d", asset.duration.seconds, asset.tracks(withMediaType: .video).count, asset.tracks(withMediaType: .audio).count))
+    var ok = abs(asset.duration.seconds - 4.5) < 0.15
+    let gen = AVAssetImageGenerator(asset: asset); gen.requestedTimeToleranceBefore = .zero; gen.requestedTimeToleranceAfter = .zero
+    func rgb(_ t: Double) -> (Double, Double, Double) {
+        guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil),
+              let c = NSBitmapImageRep(cgImage: cg).colorAt(x: cg.width / 2, y: cg.height / 2)?.usingColorSpace(.deviceRGB) else { return (-1, -1, -1) }
+        return (c.redComponent * 255, c.greenComponent * 255, c.blueComponent * 255)
+    }
+    for (t, what) in [(0.5, "rosso"), (1.5, "rosso+blu"), (2.2, "blu"), (2.75, "blu+verde"), (4.0, "verde")] {
+        let (r0, g0, b0) = rgb(t)
+        print(String(format: "[XF] t=%.2f atteso %@: %.0f,%.0f,%.0f", t, what, r0, g0, b0))
+        switch what {
+        case "rosso": if !(r0 > 150 && b0 < 80) { ok = false }
+        case "rosso+blu": if !(r0 > 50 && b0 > 50) { ok = false }
+        case "blu": if !(b0 > 150 && r0 < 80) { ok = false }
+        case "blu+verde": if !(b0 > 40 && g0 > 40) { ok = false }
+        default: if !(g0 > 100 && r0 < 80 && b0 < 80) { ok = false }
+        }
+    }
+    let full = level(dest, from: 0.2, to: 0.8), tail = level(dest, from: 1.85, to: 1.98)
+    print(String(format: "[XF] audio del rosso: pieno %.4f · fine della dissolvenza %.4f (atteso molto più basso)", full, tail))
+    if tail > full * 0.35 { ok = false }
+    if !ok { print("PROVA FALLITA (dissolvenze video)"); exit(1) }
+}
+
 let a = run(fill: false, size: CGSize(width: 1280, height: 720), name: "orizzontale-intero")
 let b = run(fill: true, size: CGSize(width: 720, height: 1280), name: "verticale-riempito")
 musicFile = "brano.mp3"
