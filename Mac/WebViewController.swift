@@ -210,6 +210,58 @@ final class WebViewController: NSViewController, WKScriptMessageHandler, WKNavig
                                 DispatchQueue.main.async { self?.renderFinished(result, name: name, renderer: renderer) }
                             })
 
+        case "block":
+            // rendering in sottofondo di un pezzo di timeline in qualità leggera (riproduzione fluida); il file va nella cartella «convertiti»
+            let id = body["id"] ?? ""
+            var bitems: [RenderItem] = []
+            for entry in body["items"] as? [[String: Any]] ?? [] {
+                guard let key = entry["key"] as? String, let url = fileURL(for: key) else {
+                    js("arnoNative.reply(\(Self.json(id)),{error:'file mancante'})"); return
+                }
+                bitems.append(RenderItem(isPhoto: (entry["type"] as? String) == "img", url: url,
+                                         duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 3,
+                                         start: (entry["tin"] as? NSNumber)?.doubleValue ?? 0,
+                                         volume: (entry["vol"] as? NSNumber)?.doubleValue ?? 1,
+                                         audioIn: (entry["ain"] as? NSNumber)?.doubleValue ?? 0,
+                                         audioOut: (entry["aout"] as? NSNumber)?.doubleValue ?? 0,
+                                         fadeIn: (entry["fin"] as? NSNumber)?.doubleValue ?? 0,
+                                         fadeOut: (entry["fout"] as? NSNumber)?.doubleValue ?? 0,
+                                         crossfade: (entry["xf"] as? NSNumber)?.doubleValue ?? 0))
+            }
+            var bmusic: [MusicItem] = []
+            for entry in body["music"] as? [[String: Any]] ?? [] {
+                guard let key = entry["key"] as? String, let url = fileURL(for: key) else { continue }
+                bmusic.append(MusicItem(url: url, start: (entry["start"] as? NSNumber)?.doubleValue ?? 0,
+                                        offset: (entry["tin"] as? NSNumber)?.doubleValue ?? 0,
+                                        duration: (entry["dur"] as? NSNumber)?.doubleValue ?? 0,
+                                        volume: (entry["vol"] as? NSNumber)?.doubleValue ?? 1))
+            }
+            let bw = max(2, ((body["w"] as? NSNumber)?.intValue ?? 960) / 2 * 2)
+            let bh = max(2, ((body["h"] as? NSNumber)?.intValue ?? 540) / 2 * 2)
+            let br = NativeRenderer()
+            br.render(items: bitems, music: bmusic, size: CGSize(width: bw, height: bh), fill: (body["fit"] as? String) == "cover",
+                      progress: { _ in }, done: { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    switch result {
+                    case .success(let out):
+                        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                            .appendingPathComponent("ArnoVideo/convertiti", isDirectory: true)
+                        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                        let dest = dir.appendingPathComponent("blocco-\(UUID().uuidString).mp4")
+                        do {
+                            try FileManager.default.moveItem(at: out, to: dest)
+                            self.js("arnoNative.reply(\(Self.json(id)),{url:\(Self.json(dest.absoluteString))})")
+                        } catch {
+                            self.js("arnoNative.reply(\(Self.json(id)),{error:\(Self.json(error.localizedDescription))})")
+                        }
+                    case .failure(let e):
+                        self.js("arnoNative.reply(\(Self.json(id)),{error:\(Self.json(e.localizedDescription))})")
+                    }
+                    br.cleanUp()
+                }
+            })
+
         case "thumbs":
             // miniature preparate dal Mac (AVFoundation): primo fotogramma + striscia
             let id = body["id"] ?? ""
