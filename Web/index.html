@@ -855,7 +855,7 @@ var splashDone=Promise.resolve();
 
 <script>
 'use strict';
-const VERSION='1.49.10';
+const VERSION='1.49.20';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -1942,6 +1942,31 @@ document.addEventListener('pointerdown',e=>{if(!$('peek').hidden&&!e.target.clos
   al.addEventListener('pointerup',up);al.addEventListener('pointercancel',up);})();
 
 /* ---------- dissolvenza: sovrapposizione della clip alla precedente ---------- */
+/* ---------- tasto «▶ Rivedi» dopo un taglio o una dissolvenza: suona da 3 s prima dell'effetto a 3 s dopo ---------- */
+const fxPlay=(function(){let btn=null,hideT=null,watch=null,rng=null;
+  function hide(){if(btn)btn.hidden=true;clearTimeout(hideT);}
+  function make(){btn=document.createElement('button');btn.type='button';btn.className='btn';btn.textContent='▶ Rivedi';
+    btn.style.cssText='position:fixed;z-index:2147483640;padding:4px 12px;font-weight:700;background:#ff4530;color:#fff;border-radius:16px;box-shadow:0 4px 14px rgba(0,0,0,.6);transform:translate(-50%,-100%)';
+    btn.hidden=true;document.body.appendChild(btn);
+    btn.addEventListener('pointerdown',e=>e.stopPropagation(),true);
+    btn.onclick=async e=>{e.stopPropagation();if(!rng)return;const r=rng;hide();unlockPv();await stopPlay();
+      // il riquadro Cut resta aperto durante la riproduzione di «Rivedi»
+      const c=items[r.i];if(c&&cutWin.show){if((c.xf||0)>0)cutWin.showXf(c);else cutWin.show(c,'l');}cutWin.keep=true;cutWin.arm();   // toglie il conto alla rovescia partito col tocco su «Rivedi»
+      setT(Math.max(0,r.a-3));startPlay();if(cutWin.syncRun)setTimeout(()=>cutWin.syncRun(r.i),300);const stopAt=Math.min(totalDur(),r.b+3);clearInterval(watch);
+      // finita la riproduzione: cursore all'inizio dell'effetto e tasto di nuovo visibile per 5 s
+      const done=async()=>{clearInterval(watch);await stopPlay();cutWin.keep=false;cutWin.syncStop();if(cutWin.arm)cutWin.arm();showFrame(r.a);rng=r;place(5000);};
+      watch=setInterval(()=>{if(!playing){done();return;}if(playT>=stopAt)done();},40);};
+    window.addEventListener('pointerdown',e=>{if(btn&&!btn.hidden&&e.target!==btn)hide();},true);}
+  // i = indice della clip che entra (confine tra i-1 e i); se i è oltre l'ultima, il taglio è la fine della timeline
+  return function(i){if(!items.length)return;if(!btn)make();
+    if(i>=items.length){const t=totalDur();rng={a:t,b:t};}else if(i<=0){rng={a:0,b:0};}else{const st=startOf(i);rng={a:st,b:st+xfOf(i),i};}
+    place(10000);};
+  function place(ms){requestAnimationFrame(()=>{const ph=$('phead'),tk=$('track');let x,y;
+      if(ph&&ph.getBoundingClientRect().width>=0){const r=ph.getBoundingClientRect();x=r.left+r.width/2;y=r.top;}
+      if(tk){const t=tk.getBoundingClientRect();if(x==null||x<t.left||x>t.right)x=t.left+t.width/2;if(y==null||y<t.top-10)y=t.top+4;}
+      btn.style.left=Math.round(Math.max(50,Math.min(innerWidth-50,x)))+'px';btn.style.top=Math.round(y)+'px';btn.hidden=false;
+      clearTimeout(hideT);hideT=setTimeout(hide,ms);});}
+})();
 (function(){let xd=null;
   $('lane').addEventListener('pointerdown',async e=>{const h=e.target.closest('.txf');if(!h||busy)return;e.preventDefault();e.stopPropagation();
     const el=h.closest('.tclip'),c=items.find(x=>x.id===+el.dataset.id);if(!c)return;
@@ -1952,7 +1977,7 @@ document.addEventListener('pointerdown',e=>{if(!$('peek').hidden&&!e.target.clos
     c.xf=Math.max(0,xd.xf0-(e.clientX-xd.sx)/trK()/pps);relayout();
     const tip=$('trimTip');tip.hidden=false;tip.textContent=c.xf>0?'⨯ dissolvenza '+fmtT(c.xf):'nessuna dissolvenza';placeTip(tip,e.clientX);
     const i=items.indexOf(c);showFrame(startOf(i)+Math.max(0,(c.xf||0)/2));if(cutWin.open)cutWin.updateXf(c);});
-  const up=e=>{if(!xd||e.pointerId!==xd.pid)return;const t=xd;xd=null;$('trimTip').hidden=true;if(t.moved){scheduleSave();render();}};
+  const up=e=>{if(!xd||e.pointerId!==xd.pid)return;const t=xd;xd=null;$('trimTip').hidden=true;if(t.moved){scheduleSave();render();fxPlay(items.indexOf(t.c));}};
   window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);})();
 
 
@@ -1973,13 +1998,23 @@ const cutWin={el:$('cutWin'),open:false};
       const u=playUrl(it);if(p.v.dataset.url!==u){p.v.src=u;p.v.dataset.url=u;await once(p.v,'loadedmetadata',8000);}
       const t=Math.max(0,Math.min((p.v.duration||1e9)-0.001,w.t));
       // iPhone: un video appena caricato non ha l'immagine pronta finche' non si sposta (all'inizio della clip currentTime e' gia' giusto)
-      if(Math.abs(p.v.currentTime-t)>0.0005||p.v.readyState<2){if(p.v.readyState<2&&Math.abs(p.v.currentTime-t)<=0.0005)p.v.currentTime=t+0.001;
-        try{await once(p.v,'seeked',4000);}catch(e){}if(Math.abs(p.v.currentTime-t)>0.0005){p.v.currentTime=t;try{await once(p.v,'seeked',4000);}catch(e){}}}
-      if(p.v.readyState<2){try{await once(p.v,'loadeddata',3000);}catch(e){}}
+      if(Math.abs(p.v.currentTime-t)>0.0005){p.v.currentTime=t;try{await once(p.v,'seeked',4000);}catch(e){}}
+      else if(p.v.readyState<2){p.v.currentTime=t+0.001;try{await once(p.v,'seeked',4000);}catch(e){}}   // solo la prima volta, se l'immagine non c'è ancora
       if(p.v.readyState>=2)draw(p,p.v,p.v.videoWidth,p.v.videoHeight);}}
     catch(e){}finally{p.busy=false;}}
   function show(p,it,t,tag){if(!it){p.want=null;blackOut(p,tag==='L'?'inizio della timeline':'fine della timeline');p.name.textContent='';p.tc.textContent='';return;}
     p.name.textContent='«'+it.name+'»';p.tc.textContent=it.type==='vid'?fmtT(t):'foto';p.want={it,t};pump(p);}
+  // durante «Rivedi»: i due riquadri suonano (muti) in sincronia con la timeline
+  W.syncRun=i=>{const L=items[i-1],R=items[i];if(!L||!R)return;let alive=true;W.syncStop=()=>{alive=false;[pane.L,pane.R].forEach(p=>{try{p.v.pause();}catch(e){}});};
+    const step=(p,it,st)=>{if(!it||it.type!=='vid')return;const v=p.v;if(v.dataset.url!==playUrl(it))return;
+      const lt=playT-st,inR=lt>=0&&lt<=it.dur,tt=(it.tin||0)+Math.max(0,Math.min(it.dur-0.02,lt));
+      if(inR){if(v.paused){try{v.currentTime=tt;v.play().catch(()=>{});}catch(e){}}else if(Math.abs(v.currentTime-tt)>0.2){try{v.currentTime=tt;}catch(e){}}}
+      else if(!v.paused){v.pause();try{v.currentTime=tt;}catch(e){}}
+      if(v.readyState>=2)draw(p,v,v.videoWidth,v.videoHeight);p.tc.textContent=fmtT(tt);};
+    const sL=startOf(i-1),sR=startOf(i);pane.L.want=null;pane.R.want=null;
+    const loop=()=>{if(!alive)return;if(!playing&&!W.keep){W.syncStop();return;}step(pane.L,L,sL);step(pane.R,R,sR);requestAnimationFrame(loop);};
+    requestAnimationFrame(loop);};
+  W.syncStop=()=>{};
   const kinds=(a,b)=>{$('cutLk').textContent=a;$('cutRk').textContent=b;};
   // dissolvenza: a sinistra la clip che esce dove comincia a sfumare, a destra quella che entra dove è del tutto visibile
   W.updateXf=c=>{const i=items.indexOf(c);if(i<1)return;const L=items[i-1],xf=c.xf||0;kinds('◀ inizio dissolvenza','fine dissolvenza ▶');
@@ -1995,17 +2030,33 @@ const cutWin={el:$('cutWin'),open:false};
     $('cutInfo').textContent='taglio a '+fmtT(cut)+(side==='l'?' · accorci l\'inizio di «'+c.name+'»':' · accorci la fine di «'+c.name+'»');
     try{setT(cut);placeHead();}catch(e){}};
   W.show=(c,side)=>{const cvs=[pane.L.cv,pane.R.cv],o=outSize();cvs.forEach(cv=>{const h=Math.round(640*o.h/o.w/2)*2||360;if(cv.height!==h){cv.height=h;}cv.parentNode.style.aspectRatio=o.w+'/'+o.h;});
-    W.el.hidden=false;W.open=true;W.update(c,side);W.arm();};
+    W.el.hidden=false;W.open=true;W.place();W.update(c,side);W.arm();};
+  // posizione: subito sopra la timeline, senza coprirla (si rimpicciolisce se lo spazio è poco); se l'hai spostata a mano resta dove l'hai messa
+  // posizione: in alto, nel terzo superiore dello schermo; se copre l'anteprima della timeline, la pagina scende sotto il riquadro
+  W.shift=0;
+  // posizione: il lato inferiore del riquadro si aggancia al lato superiore della finestra Timeline (altezza massima: un terzo dello schermo);
+  // se sopra la Timeline non c'è abbastanza spazio, la pagina scende quanto serve
+  W.place=()=>{const o=outSize(),ar=o.h/o.w||9/16,extra=62;
+    const mb=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--mbh'))||34,top0=mb+4;
+    if(W.moved)return;
+    const maxH=innerHeight/3;let wd=Math.min(760,innerWidth*0.96,Math.max(40,maxH-extra)/ar*2+24);wd=Math.max(220,wd);
+    W.el.style.width=wd+'px';W.el.style.transform='none';W.el.style.left=Math.round((innerWidth-wd)/2)+'px';
+    W.unshift();const tk=$('track');const box=tk&&(tk.closest('section')||tk);if(!box){W.el.style.top=top0+'px';return;}
+    const h=W.el.offsetHeight;let tt=box.getBoundingClientRect().top;
+    if(tt-h<top0){W.shift=Math.round(top0+h-tt);const m=document.querySelector('main');if(m)m.style.transform='translateY('+W.shift+'px)';tt+=W.shift;}
+    W.el.style.top=Math.round(tt-h)+'px';};
+  W.unshift=()=>{if(!W.shift)return;W.shift=0;const m=document.querySelector('main');if(m)m.style.transform='';};
+  window.addEventListener('resize',()=>{if(W.open)W.place();});
   // chiusura automatica dopo N secondi dall'ultimo tocco (0 = mai)
   let acT=null;W.autoSec=()=>{let v=5;try{const x=localStorage.getItem('arnovideo-cutauto');if(x!==null)v=parseFloat(x);}catch(e){}return isNaN(v)?5:v;};
-  W.arm=()=>{clearTimeout(acT);acT=null;if(!W.open)return;const n=W.autoSec();if(n>0)acT=setTimeout(()=>{if(W.open)W.close();},n*1000);};
+  W.arm=()=>{clearTimeout(acT);acT=null;if(!W.open||W.keep)return;const n=W.autoSec();if(n>0)acT=setTimeout(()=>{if(W.open)W.close();},n*1000);};
   ['pointerdown','pointermove','pointerup','wheel','keydown','touchstart'].forEach(ev=>window.addEventListener(ev,e=>{if(W.open&&(ev!=='pointermove'||e.buttons||e.pointerType!=='mouse'))W.arm();},{passive:true,capture:true}));
-  W.close=()=>{W.el.hidden=true;W.open=false;clearTimeout(acT);acT=null;Object.values(pane).forEach(p=>{p.want=null;});};
+  W.close=()=>{W.el.hidden=true;W.open=false;W.unshift();clearTimeout(acT);acT=null;Object.values(pane).forEach(p=>{p.want=null;});};
   $('cutClose').onclick=W.close;
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&W.open)W.close();});
   // si sposta trascinando la barra del titolo
   let dg=null;$('cutHead').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;const r=W.el.getBoundingClientRect();
-    dg={dx:e.clientX-r.left,dy:e.clientY-r.top,pid:e.pointerId};W.el.style.transform='none';W.el.style.left=r.left+'px';W.el.style.top=r.top+'px';
+    W.moved=true;dg={dx:e.clientX-r.left,dy:e.clientY-r.top,pid:e.pointerId};W.el.style.transform='none';W.el.style.left=r.left+'px';W.el.style.top=r.top+'px';
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}});
   window.addEventListener('pointermove',e=>{if(!dg||e.pointerId!==dg.pid)return;
     W.el.style.left=Math.max(4-W.el.offsetWidth*0.7,Math.min(innerWidth-40,e.clientX-dg.dx))+'px';W.el.style.top=Math.max(0,Math.min(innerHeight-40,e.clientY-dg.dy))+'px';});
@@ -2030,7 +2081,7 @@ const cutWin={el:$('cutWin'),open:false};
     const tip=$('trimTip');tip.hidden=false;
     tip.textContent=(c.xf>0?'⨯ dissolvenza '+fmtT(c.xf):'nessuna dissolvenza')+(d>=maxD-0.001&&maxD>0?' · limite':'');placeTip(tip,e.clientX);
     showFrame(startOf(i)+Math.max(0,(c.xf||0)/2));if(cutWin.open)cutWin.updateXf(c);});
-  const up=e=>{if(!xo||e.pointerId!==xo.pid)return;const t=xo;xo=null;$('trimTip').hidden=true;if(t.moved){scheduleSave();render();}};
+  const up=e=>{if(!xo||e.pointerId!==xo.pid)return;const t=xo;xo=null;$('trimTip').hidden=true;if(t.moved){scheduleSave();render();fxPlay(items.indexOf(t.c));}};
   window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);})();
 
 /* ---------- taglio in testa e in coda con le maniglie ---------- */
@@ -2066,7 +2117,7 @@ function relayout(){   // aggiorna larghezze e tempi senza ricostruire la timeli
     if(cutWin.open)cutWin.update(c,tr.side);
     const box=$('track'),r=box.getBoundingClientRect();if(e.clientX>r.right-30)box.scrollLeft+=10;else if(e.clientX<r.left+30)box.scrollLeft-=10;});
   const up=e=>{if(!tr||e.pointerId!==tr.pid)return;const t=tr;tr=null;t.el.classList.remove('trimming');$('trimTip').hidden=true;
-    if(t.moved){renderSel();render();}};
+    if(t.moved){renderSel();render();const k=items.indexOf(t.c);fxPlay(t.side==='l'?k:k+1);}};
   window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
 })();
 
@@ -2525,8 +2576,10 @@ function unlockPv(){if(pvUnlocked)return;pvUnlocked=true;try{const r=pv.play();i
   try{if(cutWin.unlock)cutWin.unlock();}catch(e){}}
 let seekBusy=false,seekWant=null;
 // apertura automatica del riquadro Cut quando il segno rosso sta su un taglio o dentro una dissolvenza (si attiva dal menu Impostazioni)
+let cutUserOk=false;   // all'apertura dell'app il riquadro Cut non si apre da solo: solo dopo il primo tocco dell'utente
+['pointerdown','keydown'].forEach(ev=>window.addEventListener(ev,()=>{cutUserOk=true;},{capture:true,passive:true}));
 let headDrag=false;   // il cursore si sta trascinando: il riquadro Cut resta chiuso
-function cutAutoOpen(){if(headDrag){if(cutWin.open)cutWin.close();cutWin.cur=null;return;}let on=true;try{on=localStorage.getItem('arnovideo-cutopen')!=='0';}catch(e){}
+function cutAutoOpen(){if(!cutUserOk)return;if(headDrag){if(cutWin.open)cutWin.close();cutWin.cur=null;return;}let on=true;try{on=localStorage.getItem('arnovideo-cutopen')!=='0';}catch(e){}
   if(!on||playing||exporting||!items.length||!cutWin.show)return;
   const tol=1/FPS+1e-4;
   for(let i=1;i<items.length;i++){const st=startOf(i),xf=xfOf(i),c=items[i];
@@ -2548,7 +2601,7 @@ async function drawAt(t){
     try{
       {const u=playUrl(nI);if(pv2.dataset.url!==u){pv2.src=u;pv2.dataset.url=u;pv2.load();await once(pv2,'loadedmetadata',8000);}}
       const nt=(nI.tin||0)+Math.min(nlt,Math.max(0,nI.dur-0.05));
-      if(Math.abs(pv2.currentTime-nt)>0.01||pv2.readyState<2){pv2.currentTime=nt;try{await once(pv2,'seeked',4000);}catch(e){}}
+      if(Math.abs(pv2.currentTime-nt)>0.01||pv2.readyState<2){pv2.currentTime=Math.abs(pv2.currentTime-nt)<=0.0005?nt+0.001:nt;try{await once(pv2,'seeked',4000);}catch(e){}}
       nReady=pv2.readyState>=2;
       if(!nReady)setStatus('Dissolvenza: la clip che entra non è pronta (stato '+pv2.readyState+')',true);
     }catch(e){pv2.dataset.url='';setStatus('Dissolvenza: la clip che entra non si carica ('+(e&&e.message||e)+')',true);}}
@@ -2558,14 +2611,15 @@ async function drawAt(t){
   if(it.type==='img'){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,it.el,it.w,it.h,w,h,mode);drawNext();return;}
   {const u=playUrl(it);if(pv.dataset.url!==u){pv.src=u;pv.dataset.url=u;await once(pv,'loadedmetadata',15000);}}
   const target=(it.tin||0)+Math.min(L.off,Math.max(0,it.dur-0.05));
-  if(Math.abs(pv.currentTime-target)>0.01||pv.readyState<2){pv.currentTime=target;try{await once(pv,'seeked',4000);}catch(e){}}
+  if(Math.abs(pv.currentTime-target)>0.01||pv.readyState<2){pv.currentTime=Math.abs(pv.currentTime-target)<=0.0005?target+0.001:target;try{await once(pv,'seeked',4000);}catch(e){}}   // iPhone: all'inizio della clip serve un piccolo spostamento, se no l'immagine resta nera
+  if(pv.readyState<2){try{await once(pv,'loadeddata',2000);}catch(e){}}
   if(playing||exporting)return;      // nel frattempo è ripartita la riproduzione
   if(pv.readyState>=2){x.fillStyle='#000';x.fillRect(0,0,w,h);drawFit(x,pv,pv.videoWidth,pv.videoHeight,w,h,mode);drawNext();}
 }
 async function startPlay(){
   if(playing||busy||!items.length)return;
   if(playT>=totalDur()-0.05)setT(0);
-  if(cutWin.open)cutWin.close();cutWin.cur=null;
+  if(cutWin.open&&!cutWin.keep)cutWin.close();if(!cutWin.keep)cutWin.cur=null;
   stopReq=false;playing=true;setBusy(true);$('playBtn').textContent='❚❚';
   runP=runSequence(null,playT).catch(e=>setStatus('Errore: '+e.message,true));
   await runP;
