@@ -855,7 +855,7 @@ var splashDone=Promise.resolve();
 
 <script>
 'use strict';
-const VERSION='1.49.6';
+const VERSION='1.49.10';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -1960,8 +1960,9 @@ document.addEventListener('pointerdown',e=>{if(!$('peek').hidden&&!e.target.clos
    si apre prendendo una maniglia di taglio: a sinistra l'ultimo fotogramma della clip prima del taglio, a destra il primo della clip dopo */
 const cutWin={el:$('cutWin'),open:false};
 (function(){const W=cutWin;if(!W.el)return;
-  const mk=()=>{const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';v.setAttribute('playsinline','');return v;};
+  const mk=()=>{const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';v.setAttribute('playsinline','');$('hidden').appendChild(v);return v;};
   const pane={L:{cv:$('cutL'),v:mk(),want:null,busy:false,name:$('cutLn'),tc:$('cutLt')},R:{cv:$('cutR'),v:mk(),want:null,busy:false,name:$('cutRn'),tc:$('cutRt')}};
+  W.unlock=()=>Object.values(pane).forEach(p=>{try{const r=p.v.play();if(r&&r.then)r.then(()=>p.v.pause()).catch(()=>{});}catch(e){}});
   function blackOut(p,msg){const x=p.cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,p.cv.width,p.cv.height);
     if(msg){x.fillStyle='#777';x.font='600 26px -apple-system,Helvetica,sans-serif';x.textAlign='center';x.fillText(msg,p.cv.width/2,p.cv.height/2+9);}}
   function draw(p,el,w,h){const x=p.cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,p.cv.width,p.cv.height);try{drawFit(x,el,w,h,p.cv.width,p.cv.height,'contain');}catch(e){}}
@@ -1971,7 +1972,10 @@ const cutWin={el:$('cutWin'),open:false};
       if(it.type==='img'){draw(p,it.el,it.w,it.h);continue;}
       const u=playUrl(it);if(p.v.dataset.url!==u){p.v.src=u;p.v.dataset.url=u;await once(p.v,'loadedmetadata',8000);}
       const t=Math.max(0,Math.min((p.v.duration||1e9)-0.001,w.t));
-      if(Math.abs(p.v.currentTime-t)>0.0005){p.v.currentTime=t;await once(p.v,'seeked',4000);}
+      // iPhone: un video appena caricato non ha l'immagine pronta finche' non si sposta (all'inizio della clip currentTime e' gia' giusto)
+      if(Math.abs(p.v.currentTime-t)>0.0005||p.v.readyState<2){if(p.v.readyState<2&&Math.abs(p.v.currentTime-t)<=0.0005)p.v.currentTime=t+0.001;
+        try{await once(p.v,'seeked',4000);}catch(e){}if(Math.abs(p.v.currentTime-t)>0.0005){p.v.currentTime=t;try{await once(p.v,'seeked',4000);}catch(e){}}}
+      if(p.v.readyState<2){try{await once(p.v,'loadeddata',3000);}catch(e){}}
       if(p.v.readyState>=2)draw(p,p.v,p.v.videoWidth,p.v.videoHeight);}}
     catch(e){}finally{p.busy=false;}}
   function show(p,it,t,tag){if(!it){p.want=null;blackOut(p,tag==='L'?'inizio della timeline':'fine della timeline');p.name.textContent='';p.tc.textContent='';return;}
@@ -1991,8 +1995,12 @@ const cutWin={el:$('cutWin'),open:false};
     $('cutInfo').textContent='taglio a '+fmtT(cut)+(side==='l'?' · accorci l\'inizio di «'+c.name+'»':' · accorci la fine di «'+c.name+'»');
     try{setT(cut);placeHead();}catch(e){}};
   W.show=(c,side)=>{const cvs=[pane.L.cv,pane.R.cv],o=outSize();cvs.forEach(cv=>{const h=Math.round(640*o.h/o.w/2)*2||360;if(cv.height!==h){cv.height=h;}cv.parentNode.style.aspectRatio=o.w+'/'+o.h;});
-    W.el.hidden=false;W.open=true;W.update(c,side);};
-  W.close=()=>{W.el.hidden=true;W.open=false;Object.values(pane).forEach(p=>{p.want=null;});};
+    W.el.hidden=false;W.open=true;W.update(c,side);W.arm();};
+  // chiusura automatica dopo N secondi dall'ultimo tocco (0 = mai)
+  let acT=null;W.autoSec=()=>{let v=5;try{const x=localStorage.getItem('arnovideo-cutauto');if(x!==null)v=parseFloat(x);}catch(e){}return isNaN(v)?5:v;};
+  W.arm=()=>{clearTimeout(acT);acT=null;if(!W.open)return;const n=W.autoSec();if(n>0)acT=setTimeout(()=>{if(W.open)W.close();},n*1000);};
+  ['pointerdown','pointermove','pointerup','wheel','keydown','touchstart'].forEach(ev=>window.addEventListener(ev,e=>{if(W.open&&(ev!=='pointermove'||e.buttons||e.pointerType!=='mouse'))W.arm();},{passive:true,capture:true}));
+  W.close=()=>{W.el.hidden=true;W.open=false;clearTimeout(acT);acT=null;Object.values(pane).forEach(p=>{p.want=null;});};
   $('cutClose').onclick=W.close;
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&W.open)W.close();});
   // si sposta trascinando la barra del titolo
@@ -2204,16 +2212,16 @@ const goToItem=id=>{const i=items.findIndex(x=>x.id===id);if(i>=0&&!exporting){u
   let scr=false,scrWas=false;
   $('ruler').addEventListener('pointerdown',e=>{if(!items.length||exporting)return;e.preventDefault();scr=true;unlockPv();scrWas=playing;
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}stopPlay().then(()=>showFrame(xToT(snapX(trackX(e)))));});
-  $('ruler').addEventListener('pointermove',e=>{if(scr&&!playing)showFrame(xToT(snapX(trackX(e))));});
-  ['pointerup','pointercancel'].forEach(t=>$('ruler').addEventListener(t,async()=>{if(!scr)return;scr=false;
+  $('ruler').addEventListener('pointermove',e=>{if(scr&&!playing){headDrag=true;showFrame(xToT(snapX(trackX(e))));}});
+  ['pointerup','pointercancel'].forEach(t=>$('ruler').addEventListener(t,async()=>{if(!scr)return;scr=false;if(headDrag){headDrag=false;cutAutoOpen();}
     if(resumeAfter(scrWas)){seekWant=null;await waitStopped();startPlay();}scrWas=false;}));
   // fascia col pallino: come il righello, e scorre la timeline vicino ai bordi
   let kz=false,kzWas=false;
   $('kzone').addEventListener('pointerdown',async e=>{if(!items.length||exporting)return;e.preventDefault();kz=true;unlockPv();$('phead').classList.add('drag');
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}kzWas=playing;await stopPlay();if(kz)showFrame(xToT(snapX(trackX(e))));});
   $('kzone').addEventListener('pointermove',e=>{if(!kz||playing)return;const tr=$('track'),r=tr.getBoundingClientRect();
-    if(e.clientX<r.left+30)tr.scrollLeft-=12;else if(e.clientX>r.right-30)tr.scrollLeft+=12;showFrame(xToT(snapX(trackX(e))));});
-  const kzEnd=async()=>{if(!kz)return;kz=false;$('phead').classList.remove('drag');
+    headDrag=true;if(e.clientX<r.left+30)tr.scrollLeft-=12;else if(e.clientX>r.right-30)tr.scrollLeft+=12;showFrame(xToT(snapX(trackX(e))));});
+  const kzEnd=async()=>{if(!kz)return;kz=false;if(headDrag){headDrag=false;cutAutoOpen();}$('phead').classList.remove('drag');
     if(resumeAfter(kzWas)){seekWant=null;await waitStopped();startPlay();}kzWas=false;};
   ['pointerup','pointercancel'].forEach(t=>$('kzone').addEventListener(t,kzEnd));
 })();
@@ -2513,9 +2521,19 @@ const pv=makeVideo();pv.muted=true;           // lettore muto solo per mostrare 
 const pv2=makeVideo();pv2.muted=true;         // secondo lettore muto: mostra la clip che entra nella zona di dissolvenza
 let pvUnlocked=false;
 function unlockPv(){if(pvUnlocked)return;pvUnlocked=true;try{const r=pv.play();if(r&&r.then)r.then(()=>pv.pause()).catch(()=>{});}catch(e){}
-  try{const r=pv2.play();if(r&&r.then)r.then(()=>pv2.pause()).catch(()=>{});}catch(e){}}
+  try{const r=pv2.play();if(r&&r.then)r.then(()=>pv2.pause()).catch(()=>{});}catch(e){}
+  try{if(cutWin.unlock)cutWin.unlock();}catch(e){}}
 let seekBusy=false,seekWant=null;
-function showFrame(t){setT(t);seekWant=playT;if(seekBusy)return;seekBusy=true;
+// apertura automatica del riquadro Cut quando il segno rosso sta su un taglio o dentro una dissolvenza (si attiva dal menu Impostazioni)
+let headDrag=false;   // il cursore si sta trascinando: il riquadro Cut resta chiuso
+function cutAutoOpen(){if(headDrag){if(cutWin.open)cutWin.close();cutWin.cur=null;return;}let on=true;try{on=localStorage.getItem('arnovideo-cutopen')!=='0';}catch(e){}
+  if(!on||playing||exporting||!items.length||!cutWin.show)return;
+  const tol=1/FPS+1e-4;
+  for(let i=1;i<items.length;i++){const st=startOf(i),xf=xfOf(i),c=items[i];
+    if(xf>0&&playT>=st-tol&&playT<=st+xf+tol){if(cutWin.open&&cutWin.cur===c.id+'x'){cutWin.arm();return;}cutWin.cur=c.id+'x';const t=playT;cutWin.showXf(c);setT(t);return;}
+    if(xf<=0&&Math.abs(playT-st)<=tol){if(cutWin.open&&cutWin.cur===c.id+'l'){cutWin.arm();return;}cutWin.cur=c.id+'l';cutWin.show(c,'l');return;}}
+  cutWin.cur=null;}
+function showFrame(t){setT(t);cutAutoOpen();seekWant=playT;if(seekBusy)return;seekBusy=true;
   (async()=>{while(seekWant!==null){const tt=seekWant;seekWant=null;try{await drawAt(tt);}catch(e){}}seekBusy=false;})();}
 async function drawAt(t){
   if(!items.length)return blank();
@@ -2547,6 +2565,7 @@ async function drawAt(t){
 async function startPlay(){
   if(playing||busy||!items.length)return;
   if(playT>=totalDur()-0.05)setT(0);
+  if(cutWin.open)cutWin.close();cutWin.cur=null;
   stopReq=false;playing=true;setBusy(true);$('playBtn').textContent='❚❚';
   runP=runSequence(null,playT).catch(e=>setStatus('Errore: '+e.message,true));
   await runP;
@@ -2603,8 +2622,8 @@ $('nextItem').onclick=()=>{unlockPv();if(!items.length)return;const L=locate(pla
 // barra di posizione trascinabile
 (function(){let was=false,active=false;const sc=$('scrub');
   sc.addEventListener('pointerdown',async()=>{unlockPv();if(active)return;active=true;was=playing;await stopPlay();});
-  sc.addEventListener('input',async()=>{if(playing)await stopPlay();showFrame(+sc.value);});
-  const fine=async()=>{if(!active)return;active=false;if(resumeAfter(was)){seekWant=null;await waitStopped();startPlay();}was=false;};
+  sc.addEventListener('input',async()=>{if(playing)await stopPlay();if(active)headDrag=true;showFrame(+sc.value);});
+  const fine=async()=>{if(!active)return;active=false;if(headDrag){headDrag=false;cutAutoOpen();}if(resumeAfter(was)){seekWant=null;await waitStopped();startPlay();}was=false;};
   sc.addEventListener('change',fine);sc.addEventListener('pointerup',fine);
 })();
 ['fmt','fit'].forEach(id=>$(id).addEventListener('change',()=>{if(!busy&&items.length)showFrame(playT);}));
@@ -2875,6 +2894,12 @@ document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return
     ...pick('defDur','Durata predefinita delle foto',o=>o.textContent+' secondi'),'-',
     ...pick('quality','Qualità dell\'esportazione'),'-',
     ...pick('frameFmt','Formato del fotogramma'),'-',
+    {h:'Riquadro Cut'},
+    {l:'Si apre da solo sul taglio o sulla dissolvenza',chk:()=>{try{return localStorage.getItem('arnovideo-cutopen')!=='0';}catch(e){return true;}},
+      run:()=>{let on=true;try{on=localStorage.getItem('arnovideo-cutopen')!=='0';localStorage.setItem('arnovideo-cutopen',on?'0':'1');}catch(e){}setStatus(on?'Apertura automatica del riquadro Cut spenta.':'Apertura automatica del riquadro Cut accesa.');}},
+    {h:'Chiusura automatica del riquadro Cut'},
+    ...[[0,'Mai'],[3,'3 secondi'],[5,'5 secondi'],[10,'10 secondi'],[20,'20 secondi']].map(([n,l])=>({l,chk:()=>cutWin.autoSec&&cutWin.autoSec()===n,
+      run:()=>{try{localStorage.setItem('arnovideo-cutauto',String(n));}catch(e){}if(cutWin.arm)cutWin.arm();setStatus('Chiusura automatica del riquadro Cut: '+l.toLowerCase());}})),'-',
     ...(()=>{const a=pick('macZoomSel','Dimensione dell\'interfaccia (Mac)'),b=pick('uisSel','Dimensione dell\'interfaccia');return a.length||b.length?[...a,...b,'-']:[];})(),
     {h:'Avvio'},
     {l:'Sigla all\'apertura',chk:()=>{try{return localStorage.getItem('arnovideo-sigla')!=='0';}catch(e){return true;}},run:()=>{let on=true;try{on=localStorage.getItem('arnovideo-sigla')!=='0';localStorage.setItem('arnovideo-sigla',on?'0':'1');}catch(e){}setStatus(on?'Sigla all\'apertura spenta.':'Sigla all\'apertura accesa: la vedrai al prossimo avvio.');}},'-',
