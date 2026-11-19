@@ -14,6 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Usa Xcode 26 (richiesto da Apple per TestFlight)
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$X" ]; then echo "::error::Su questo Mac di GitHub non c'è Xcode 26"; ls -d /Applications/Xcode*.app; exit 1; fi
+          sudo xcode-select -s "$X/Contents/Developer"; xcodebuild -version
+
       - name: Installa XcodeGen
         run: brew install xcodegen
 
@@ -64,6 +70,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/keys"
           printf '%s' "$KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$X" ]; then echo "::error::Su questo Mac di GitHub non c'è Xcode 26"; exit 1; fi
+          sudo xcode-select -s "$X/Contents/Developer"; xcodebuild -version
           brew install xcodegen
           xcodegen generate
 
