@@ -2,6 +2,9 @@
 name: Verifica segreti Apple
 on:
   workflow_dispatch:
+  push:
+    branches: [prova-mac]
+    paths: ['.github/workflows/verifica-segreti.yml']
 jobs:
   verifica:
     runs-on: ubuntu-latest
