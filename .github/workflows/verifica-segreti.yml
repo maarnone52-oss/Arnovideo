@@ -1,4 +1,4 @@
-# Controlla i segreti Apple senza mostrarli: dice solo se il formato è giusto e se Apple accetta la chiave.
+# Controlla i segreti Apple senza mostrarli (prova 2): dice solo se il formato è giusto e se Apple accetta la chiave.
 name: Verifica segreti Apple
 on:
   workflow_dispatch:
@@ -42,5 +42,8 @@ jobs:
               u=requests.get('https://api.appstoreconnect.apple.com/v1/apps',params={'limit':1},headers={'Authorization':'Bearer '+tok})
               print('(controllo) la chiave vede le app dell\'account:',ok(u.status_code==200))
           else:
-              print('Dettaglio di Apple:',r.text[:300])
+              print('Dettaglio di Apple:',r.text[:160])
+              t2=jwt.encode({'sub':'user','iat':int(time.time()),'exp':int(time.time())+600,'aud':'appstoreconnect-v1'},p.strip(),algorithm='ES256',headers={'kid':k.strip(),'typ':'JWT'})
+              r2=requests.get('https://api.appstoreconnect.apple.com/v1/apps',params={'limit':1},headers={'Authorization':'Bearer '+t2})
+              print('E se fosse una chiave INDIVIDUALE? Apple la accetta:',ok(r2.status_code==200),'(risposta',r2.status_code,')')
           PY
