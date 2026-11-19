@@ -1,0 +1,43 @@
+# Controlla i segreti Apple senza mostrarli: dice solo se il formato è giusto e se Apple accetta la chiave.
+name: Verifica segreti Apple
+on:
+  workflow_dispatch:
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+      KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Controlla
+        run: |
+          pip install -q pyjwt cryptography requests
+          python3 - <<'PY'
+          import os,re,time,jwt,requests
+          ok=lambda b:'GIUSTO' if b else 'SBAGLIATO'
+          t=os.environ['TEAM_ID'];k=os.environ['KEY_ID'];i=os.environ['ISSUER_ID'];p=os.environ['KEY_P8'];b=os.environ['BUNDLE_ID']
+          print('APPLE_TEAM_ID formato (10 caratteri):',ok(re.fullmatch(r'[A-Z0-9]{10}',t.strip()) is not None),'| spazi in più:',t!=t.strip())
+          print('ASC_KEY_ID formato (10 caratteri):',ok(re.fullmatch(r'[A-Z0-9]{10}',k.strip()) is not None),'| spazi in più:',k!=k.strip())
+          print('ASC_ISSUER_ID formato (codice con trattini):',ok(re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',i.strip()) is not None),'| spazi in più:',i!=i.strip())
+          print('ASC_KEY_P8 inizio BEGIN PRIVATE KEY:',ok(p.strip().startswith('-----BEGIN PRIVATE KEY-----')),'| fine END PRIVATE KEY:',ok(p.strip().endswith('-----END PRIVATE KEY-----')),'| righe:',len(p.strip().splitlines()))
+          print('APP_BUNDLE_ID:',ok(b.strip()=='com.arnone.arnocut'),'| spazi in più:',b!=b.strip())
+          try:
+              tok=jwt.encode({'iss':i.strip(),'iat':int(time.time()),'exp':int(time.time())+600,'aud':'appstoreconnect-v1'},p.strip(),algorithm='ES256',headers={'kid':k.strip(),'typ':'JWT'})
+          except Exception as e:
+              print('Chiave .p8 leggibile:',ok(False),type(e).__name__);raise SystemExit(1)
+          print('Chiave .p8 leggibile:',ok(True))
+          r=requests.get('https://api.appstoreconnect.apple.com/v1/bundleIds',params={'filter[identifier]':b.strip(),'limit':5},headers={'Authorization':'Bearer '+tok})
+          print('Apple accetta la chiave (Key ID + Issuer ID + .p8 insieme):',ok(r.status_code==200),'(risposta',r.status_code,')')
+          if r.status_code==200:
+              d=[x for x in r.json().get('data',[]) if x['attributes']['identifier']==b.strip()]
+              print('Bundle ID registrato su developer.apple.com:',ok(bool(d)))
+              a=requests.get('https://api.appstoreconnect.apple.com/v1/apps',params={'filter[bundleId]':b.strip()},headers={'Authorization':'Bearer '+tok})
+              print('Scheda app in App Store Connect con questo Bundle ID:',ok(a.status_code==200 and len(a.json().get('data',[]))>0))
+              u=requests.get('https://api.appstoreconnect.apple.com/v1/apps',params={'limit':1},headers={'Authorization':'Bearer '+tok})
+              print('(controllo) la chiave vede le app dell\'account:',ok(u.status_code==200))
+          else:
+              print('Dettaglio di Apple:',r.text[:300])
+          PY
