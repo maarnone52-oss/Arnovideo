@@ -1,4 +1,4 @@
-# Controlla i segreti Apple senza mostrarli (prova 2): dice solo se il formato è giusto e se Apple accetta la chiave.
+# Controlla i segreti Apple senza mostrarli (prova 3): dice solo se il formato è giusto e se Apple accetta la chiave.
 name: Verifica segreti Apple
 on:
   workflow_dispatch:
