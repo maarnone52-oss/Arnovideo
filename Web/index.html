@@ -855,7 +855,7 @@ var splashDone=Promise.resolve();
 
 <script>
 'use strict';
-const VERSION='1.49.20';
+const VERSION='1.49.21';
 document.getElementById('ver').textContent=VERSION;
 const $=id=>document.getElementById(id);
 const media=[];               // file caricati: {mid,type,file,url,name,dur,w,h,thumb,strip,fkey,el}
@@ -3126,7 +3126,7 @@ if(/^https?:/.test(location.protocol)){let chk=0;const checkNew=async()=>{if(Dat
 </script>
 <script>/* disposizione sul Mac: impaginazione ARNOCANVAS (predefinita), riquadri liberi, oppure pagina originale */
 (function(){var iph=/iPhone|iPod/i.test(navigator.userAgent),m='free';
-  if(iph){var si=document.createElement('script');si.src='impaginazione-iphone.js?v=18';document.body.appendChild(si);}   // iPhone: impaginazione ARNOCANVAS per iPhone
+  if(iph&&/[?&]impaginazione=1/.test(location.search)){var si=document.createElement('script');si.src='impaginazione-iphone.js?v=18';document.body.appendChild(si);}   // iPhone: pagina originale (come in ARNOCANVAS); l'impaginazione iPhone solo con ?impaginazione=1
   else{try{m=localStorage.getItem('arnovideo-disposizione-modo')||'free'}catch(e){}if(m==='canvas')m='free';
   if(m==='canvas'){var s=document.createElement('script');s.src='impaginazione-mac.js?v=16';document.body.appendChild(s);}}
   if(iph||m==='canvas'){
